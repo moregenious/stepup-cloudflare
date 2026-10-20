@@ -1,0 +1,21 @@
+{
+  "name": "step-up-english",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Step Up English — CRM & LMS on Cloudflare Workers + D1 + R2 (free tier)",
+  "scripts": {
+    "dev": "node dev/server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute stepup --remote --file=migrations/0001_init.sql",
+    "migrate:prepare": "node tools/prepare-migration.mjs",
+    "migrate:upload": "node tools/upload-files.mjs"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "devDependencies": {
+    "wrangler": "^4.140.0"
+  }
+}

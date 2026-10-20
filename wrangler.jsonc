@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stepup-english",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-01",
+
+  // Static site. Only API, files and old /uploads links invoke the Worker
+  // (static requests are free and do not count towards the 100k requests/day limit).
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/files/*", "/uploads/*"]
+  },
+
+  // npx wrangler d1 create stepup   -> paste the printed database_id below
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "stepup",
+      "database_id": "f1c934fe-f2ee-4955-a7da-e9fa1710427a",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // npx wrangler r2 bucket create stepup-files
+  "r2_buckets": [
+    { "binding": "FILES", "bucket_name": "stepup-files" }
+  ],
+
+  "observability": { "enabled": true }
+}

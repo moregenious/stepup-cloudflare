@@ -1,0 +1,17 @@
+# Dependencies & tooling
+node_modules/
+.wrangler/
+
+# Local data, migration output, backups — contain personal data, never commit
+data/
+*.sqlite
+*backup*.json
+*.json.json
+db.json
+import.sql
+
+# Secrets
+.dev.vars
+.env
+.env.*
+!.dev.vars.example

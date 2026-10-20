@@ -1,0 +1,2 @@
+# Copy to .dev.vars for `npx wrangler dev` (local only, never commit)
+SESSION_SECRET=change-me-to-a-long-random-string-at-least-32-chars
