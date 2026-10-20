@@ -110,6 +110,29 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   ] } });
   assert.deepEqual(hack.json.results.map(r => r.ok), [false, false, false]);
 
+  // Mini-games: the server applies the weekly limit (100 at the start) and keeps the streak
+  const games = [];
+  for (let i = 0; i < 12; i++) {
+    games.push({ c: 'pointRecords', id: `pt-game-${i}`, t: 'put', v: { studentId: 'stu-1', points: 10, gameScore: 10, gameTitle: 'Тест', category: 'Мини-игры' } });
+  }
+  const g = await call('/api/push', { cookie: student.cookie, body: { ops: games } });
+  assert.ok(g.json.results.every(r => r.ok), JSON.stringify(g.json.results));
+  const gState = await call('/api/state', { body: { known: {} }, cookie: student.cookie });
+  const me = rowsOf(gState, 'students').find(s => s.id === 'stu-1');
+  assert.equal(me.gameLedger.pts, 100);
+  assert.equal(me.gameLedger.streak, 1);
+  assert.equal(rowsOf(gState, 'pointRecords').filter(r => r.category === 'Мини-игры').reduce((a, r) => a + r.points, 0), 100);
+  // Student cannot raise the limit by editing the ledger
+  await call('/api/push', { cookie: student.cookie, body: { ops: [{ c: 'students', id: 'stu-1', t: 'patch', set: [[['gameLedger', 'level'], 40]], unset: [] }] } });
+  const g2 = await call('/api/push', { cookie: student.cookie, body: { ops: [{ c: 'pointRecords', id: 'pt-game-x', t: 'put', v: { studentId: 'stu-1', points: 10, gameScore: 10, category: 'Мини-игры' } }] } });
+  assert.equal(g2.json.results[0].ok, true);
+  const gState2 = await call('/api/state', { body: { known: {} }, cookie: student.cookie });
+  assert.equal(rowsOf(gState2, 'pointRecords').some(r => r.id === 'pt-game-x'), false, 'no record over the limit');
+  assert.equal(rowsOf(gState2, 'students').find(s => s.id === 'stu-1').gameLedger.level, 0);
+  // Re-sending an already saved record (lost response) is accepted without changes
+  const again = await call('/api/push', { cookie: student.cookie, body: { ops: [games[0]] } });
+  assert.equal(again.json.results[0].ok, true);
+
   // Purchase with balance check
   const buy = await call('/api/push', { cookie: student.cookie, body: { ops: [
     { c: 'purchases', id: 'pur-1', t: 'put', v: { studentId: 'stu-1', type: 'staff', itemId: 'staff-1', price: 50 } }

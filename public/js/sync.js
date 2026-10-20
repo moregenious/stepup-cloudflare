@@ -186,6 +186,9 @@ export class SyncEngine {
     this.started = false;
     this.readyResolvers = [];
     this.sent = new Map();
+    this.dirty = false;        // local edits waiting to be sent
+    this.pushing = false;      // a push request is in flight
+    this.retryCount = 0;
   }
 
   // ---------------- lifecycle ----------------
@@ -221,6 +224,9 @@ export class SyncEngine {
     this.ready = false;
     this.remoteMeta = null;
     this.sent.clear();
+    this.dirty = false;
+    this.pushing = false;
+    this.retryCount = 0;
     if (clearCache) SyncEngine.clearAllCaches();
   }
 
@@ -341,12 +347,17 @@ export class SyncEngine {
       this.rebase();
       this.saveCache();
     }
-    if (getCloudStatus() !== 'saving') setStatus('connected');
+    if (this.dirty || this.pushing) setStatus('saving');
+    else if (getCloudStatus() !== 'saving') setStatus('connected');
     return changed;
   }
 
   pull(opts) {
-    return this.enqueue(() => this.pullNow(opts)).catch(err => {
+    return this.enqueue(async () => {
+      // Unsaved edits go first: a slow check for updates must not hold them back
+      if (this.dirty) await this.pushNow();
+      return this.pullNow(opts);
+    }).catch(err => {
       setStatus(err.network ? 'offline' : 'error', err);
     });
   }
@@ -354,6 +365,7 @@ export class SyncEngine {
   // ---------------- push ----------------
   schedulePush(immediate = false) {
     if (!this.started) return;
+    this.dirty = true;
     clearTimeout(this.pushTimer);
     this.pushTimer = setTimeout(() => {
       this.enqueue(() => this.pushNow()).catch(() => {});
@@ -380,22 +392,54 @@ export class SyncEngine {
     });
   }
 
-  async pushNow() {
-    if (!this.base) return;
+  /** Local edits not yet confirmed by the server */
+  pendingOps() {
+    if (!this.base) return [];
     const state = this.hooks.getState();
+    if (!state) return [];
     this.hooks.beforeDiff(state);
-    const ops = this.filterForRole(diffStates(this.base, state));
+    return this.filterForRole(diffStates(this.base, state));
+  }
+
+  hasPendingChanges() {
+    if (!this.started) return false;
+    return this.pushing || this.pendingOps().length > 0;
+  }
+
+  /** Send everything now and wait (used before logout). Resolves true when nothing is left unsaved. */
+  async flush(timeoutMs = 20000) {
+    if (!this.started) return true;
+    clearTimeout(this.pushTimer);
+    clearTimeout(this.retryTimer);
+    const work = this.enqueue(() => this.pushNow()).catch(() => {});
+    await Promise.race([work, new Promise(r => setTimeout(r, timeoutMs))]);
+    return !this.hasPendingChanges();
+  }
+
+  async pushNow({ keepalive = false } = {}) {
+    if (!this.base) return;
+    this.dirty = false;
+    const ops = this.pendingOps();
     if (!ops.length) return;
 
     setStatus('saving');
     let resp;
+    this.pushing = true;
     try {
-      resp = await apiRequest('/api/push', { body: { ops } });
+      const body = { ops };
+      // Big batches (e.g. a whole textbook) get more time on a slow connection
+      const size = JSON.stringify(body).length;
+      resp = await apiRequest('/api/push', { body, timeoutMs: 10000 + Math.ceil(size / 10), keepalive });
+      this.retryCount = 0;
     } catch (err) {
+      this.dirty = true;
       if (err.status === 401 || err.status === 403) { setStatus('error', err); return; }
       setStatus(err.network ? 'offline' : 'error', err);
       clearTimeout(this.retryTimer);
-      this.retryTimer = setTimeout(() => this.schedulePush(true), err.network ? 5000 : 15000);
+      // 2 s, 4 s, 8 s, then every 15 s
+      const delay = err.network ? Math.min(15000, 2000 * 2 ** this.retryCount) : 15000;
+      this.retryCount += 1;
+      this.retryTimer = setTimeout(() => this.schedulePush(true), delay);
       if (!err.network && err.status >= 400 && err.status < 500) {
         // Server refused the whole batch (validation error): drop these local edits to avoid loops
         this.hooks.onRejected([{ ok: false, reason: err.message }]);
@@ -403,6 +447,8 @@ export class SyncEngine {
         this.rebase({ drop: new Set(ops.map(opKey)) });
       }
       return;
+    } finally {
+      this.pushing = false;
     }
 
     this.applyShardResponse(resp.shards);
@@ -421,7 +467,7 @@ export class SyncEngine {
     this.rebase({ drop });
     this.saveCache();
     if (rejected.length) this.hooks.onRejected(rejected);
-    setStatus('connected');
+    setStatus(this.dirty ? 'saving' : 'connected');
   }
 
   // ---------------- change polling ----------------
@@ -455,6 +501,18 @@ export class SyncEngine {
     };
     window.addEventListener('focus', refresh);
     window.addEventListener('online', () => { refresh(); this.schedulePush(true); });
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) { refresh(); return; }
+      // Tab hidden / phone locked / page closing: send unsaved edits right away, surviving page close
+      if (this.started && this.dirty) {
+        clearTimeout(this.pushTimer);
+        this.enqueue(() => this.pushNow({ keepalive: true })).catch(() => {});
+      }
+    });
+    window.addEventListener('beforeunload', (e) => {
+      if (!this.hasPendingChanges()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
   }
 }

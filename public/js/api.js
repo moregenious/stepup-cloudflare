@@ -38,22 +38,41 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest(path, { method = 'POST', body, signal } = {}) {
+const DEFAULT_TIMEOUT_MS = 15000;
+
+/**
+ * JSON request to the backend.
+ * timeoutMs: a request that hangs (weak Wi-Fi) is cut off and reported as a network error so it can be retried.
+ * keepalive: the browser finishes sending the request even if the page is being closed (body must be < 64 KB).
+ */
+export async function apiRequest(path, { method = 'POST', body, signal, timeoutMs = DEFAULT_TIMEOUT_MS, keepalive = false } = {}) {
+  const payload = body !== undefined ? JSON.stringify(body) : undefined;
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller && timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  if (signal && controller) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
   let res;
   try {
     res = await fetch(path, {
       method,
       credentials: 'same-origin',
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: payload !== undefined ? { 'Content-Type': 'application/json' } : {},
+      body: payload,
       cache: 'no-store',
-      signal
+      keepalive: Boolean(keepalive && payload && payload.length < 60000),
+      signal: controller ? controller.signal : signal
     });
   } catch (networkErr) {
-    const err = new ApiError(0, { error: 'Нет соединения с сервером' });
+    clearTimeout(timer);
+    const timedOut = controller && controller.signal.aborted && !(signal && signal.aborted);
+    const err = new ApiError(0, { error: timedOut ? 'Сервер долго не отвечает' : 'Нет соединения с сервером' });
     err.network = true;
+    err.timeout = Boolean(timedOut);
     throw err;
   }
+  clearTimeout(timer);
   let data = null;
   try { data = await res.json(); } catch (e) { data = null; }
   if (!res.ok) {

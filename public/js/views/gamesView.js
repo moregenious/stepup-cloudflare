@@ -101,9 +101,12 @@ export const GamesView = {
                 <span>⭐ Недельный лимит:</span>
                 <span style="color: #fef08a; font-size: 0.95rem;">${progress.weeklyPoints} / ${progress.weeklyLimit} баллов</span>
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: #fde047; margin-bottom: 6px; font-weight: 600;" title="Каждые 7 дней ежедневной серии увеличивают недельный лимит на +10 ⭐ (макс. 500 ⭐). До следующего бонуса: ${7 - ((progress.dailyStreak || 0) % 7)} дн.">
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: #fde047; margin-bottom: 2px; font-weight: 600;" title="День засчитывается в серию, если за день набрать в играх не меньше ${progress.minDailyScore || 10} баллов. Каждые 7 дней серии подряд: +10 к недельному лимиту (до 500). Каждый пропущенный день: −10 (не ниже 100).">
                 <span>🔥 Серия: ${progress.dailyStreak || 0} дн.</span>
-                <span>+${progress.streakBonus || 0} к лимиту (+10 за 7 дн.)</span>
+                <span>+${progress.streakBonus || 0} к лимиту${progress.daysToNextLevel ? ` · ещё +10 через ${progress.daysToNextLevel} дн.` : ''}</span>
+              </div>
+              <div style="font-size: 0.68rem; color: #e0e7ff; margin-bottom: 6px;">
+                ${progress.todayCounted ? '✅ Сегодня день засчитан в серию' : `Сегодня: ${progress.todayScore || 0} / ${progress.minDailyScore || 10} ⭐ — наберите ${progress.minDailyScore || 10}, чтобы день засчитался`}
               </div>
               <div style="width: 100%; height: 8px; background: rgba(0, 0, 0, 0.25); border-radius: 4px; overflow: hidden;">
                 <div style="width: ${weeklyPercent}%; height: 100%; background: linear-gradient(90deg, #facc15, #f59e0b); border-radius: 4px; transition: width 0.4s ease;"></div>

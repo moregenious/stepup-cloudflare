@@ -91,6 +91,8 @@ class Auth {
 
   async serverLogin(payload) {
     try {
+      // Switching accounts on this device: first save what the previous user changed
+      if (this.isLoggedIn && store.sync.hasPendingChanges()) await store.sync.flush(15000);
       const res = await apiRequest('/api/auth', { body: payload });
       this.applySession(res.role, res.user?.id);
       // Wait for the first data load so the cabinet opens with data
@@ -162,9 +164,31 @@ class Auth {
     this.notify();
   }
 
-  logout() {
-    apiRequest('/api/auth', { body: { action: 'logout' } }).catch(() => {});
-    this.forceLogout();
+  /**
+   * Log out after unsaved changes reach the server (a slow connection must not lose the last marks).
+   * Resolves false if the user chose to stay because changes could not be saved.
+   */
+  async logout() {
+    if (this._loggingOut) return this._loggingOut;
+    this._loggingOut = (async () => {
+      try {
+        if (store.sync.hasPendingChanges()) {
+          let toast = null;
+          try { toast = (await import('./components/toast.js')).toast; } catch (e) { /* ignore */ }
+          toast?.info('Сохраняем изменения перед выходом…');
+          const saved = await store.sync.flush(20000);
+          if (!saved && !window.confirm('Не удалось сохранить последние изменения: нет связи с сервером.\n\nВыйти всё равно? Несохранённые изменения пропадут.')) {
+            return false;
+          }
+        }
+        apiRequest('/api/auth', { body: { action: 'logout' } }).catch(() => {});
+        this.forceLogout();
+        return true;
+      } finally {
+        this._loggingOut = null;
+      }
+    })();
+    return this._loggingOut;
   }
 
   getRole() {

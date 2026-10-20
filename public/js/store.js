@@ -5,6 +5,7 @@
 
 import { MONTH_NAMES } from './data/seedData.js';
 import { SyncEngine } from './sync.js';
+import { GAME_RULES, viewLedger, playGame, migrateLedger } from './shared/gameStreak.js';
 import { apiRequest, getServerConfig, onUnauthorized } from './api.js';
 import { logger } from './utils/logger.js';
 import { toast } from './components/toast.js';
@@ -92,6 +93,7 @@ export const RUSSIAN_DAYS_SHORT = [
 
 class Store {
   constructor() {
+    this._gameOverlay = new Map();
     this.listeners = [];
     this._serverSynced = false;
     this._lastLocalSave = 0;
@@ -476,7 +478,7 @@ class Store {
 
   /** Admin: replace all server data with a backup file (exportJSON / /api/admin export / old db.json) */
   async restoreBackup(backupState) {
-    const res = await apiRequest('/api/admin', { body: { action: 'import', state: backupState } });
+    const res = await apiRequest('/api/admin', { body: { action: 'import', state: backupState }, timeoutMs: 0 });
     this.sync.stop({ clearCache: true });
     return res;
   }
@@ -3827,25 +3829,8 @@ class Store {
       student.gameStats.weekly = { weekKey: currentWeekKey, points: 0 };
     }
 
-    // Daily streak & dynamic weekly limit (base 100, +10 for every full 7 days of daily streak, max 500)
-    const todayStr = this.getLocalDateString();
-    const yesterdayStr = this.getLocalDateString(new Date(Date.now() - 86400000));
-    const lastGameDate = student.gameStats.lastGameDate || null;
-    let currentStreak = Number(student.gameStats.dailyStreak) || 0;
-
-    if (lastGameDate) {
-      if (lastGameDate !== todayStr && lastGameDate !== yesterdayStr) {
-        // Streak broken if student missed a day
-        currentStreak = 0;
-        student.gameStats.dailyStreak = 0;
-      }
-    } else {
-      currentStreak = 0;
-      student.gameStats.dailyStreak = 0;
-    }
-
-    const streakBonus = Math.floor(currentStreak / 7) * 10;
-    const weeklyLimit = Math.min(500, 100 + streakBonus);
+    // Weekly limit and streak are kept by the server (student.gameLedger); a just-played game is shown until the server answers
+    const game = viewLedger(this.effectiveGameLedger(student));
 
     if (!Array.isArray(student.gameStats.unlockedTenseLevels) || student.gameStats.unlockedTenseLevels.length === 0) {
       student.gameStats.unlockedTenseLevels = ['easy'];
@@ -3864,12 +3849,15 @@ class Store {
     }
 
     return {
-      weeklyPoints: student.gameStats.weekly.points || 0,
-      weeklyLimit,
-      dailyStreak: currentStreak,
-      streakBonus,
-      lastGameDate,
-      currentWeekKey,
+      weeklyPoints: game.weeklyPoints,
+      weeklyLimit: game.weeklyLimit,
+      dailyStreak: game.dailyStreak,
+      streakBonus: game.streakBonus,
+      daysToNextLevel: game.daysToNextLevel,
+      todayScore: game.todayScore,
+      todayCounted: game.todayCounted,
+      minDailyScore: GAME_RULES.MIN_DAILY_SCORE,
+      currentWeekKey: game.currentWeekKey,
       wordsStreak: student.gameStats.wordsStreak || 0,
       irregularStreak: student.gameStats.irregularStreak || 0,
       conditionalStreak: student.gameStats.conditionalStreak || 0,
@@ -3892,59 +3880,54 @@ class Store {
 
     if (!student.gameStats) student.gameStats = {};
 
-    // Update daily streak on gameplay
-    const todayStr = this.getLocalDateString();
-    const yesterdayStr = this.getLocalDateString(new Date(Date.now() - 86400000));
-    const lastGameDate = student.gameStats.lastGameDate || null;
-
-    let streak = Number(student.gameStats.dailyStreak) || 0;
-    if (lastGameDate === todayStr) {
-      // Already played today, maintain streak
-    } else if (lastGameDate === yesterdayStr) {
-      // Consecutive day! Advance streak
-      streak += 1;
-      student.gameStats.dailyStreak = streak;
-      student.gameStats.lastGameDate = todayStr;
-    } else {
-      // Streak broken or first game played -> starts at 1
-      streak = 1;
-      student.gameStats.dailyStreak = streak;
-      student.gameStats.lastGameDate = todayStr;
+    const rawPoints = Math.max(0, Math.floor(Number(pointsEarned) || 0));
+    if (rawPoints <= 0) {
+      const g = viewLedger(this.effectiveGameLedger(student));
+      return { pointsEarned: 0, pointsAwarded: 0, weeklyTotal: g.weeklyPoints, weeklyLimit: g.weeklyLimit, dailyStreak: g.dailyStreak, streakBonus: g.streakBonus, capReached: g.weeklyPoints >= g.weeklyLimit };
     }
 
-    const streakBonus = Math.floor(streak / 7) * 10;
-    const weeklyLimit = Math.min(500, 100 + streakBonus);
+    // Same calculation the server makes; the server's answer replaces this preview
+    const result = playGame(this.effectiveGameLedger(student), rawPoints);
+    this._gameOverlay.set(studentId, result.ledger);
 
-    const progress = this.getStudentGameProgress(studentId);
-    const weeklyPoints = progress.weeklyPoints;
-    const remainingCap = Math.max(0, weeklyLimit - weeklyPoints);
-    const rawPoints = Math.max(0, Number(pointsEarned) || 0);
-    const pointsAwarded = Math.min(rawPoints, remainingCap);
-
-    if (pointsAwarded > 0) {
-      student.gameStats.weekly.points += pointsAwarded;
-      this.awardPoints({
-        studentId,
-        teacherId: 'admin',
-        points: pointsAwarded,
-        type: 'add',
-        category: 'Мини-игры',
-        comment: `🎮 ${gameTitle}: набрано ${rawPoints} из 10 (начислено +${pointsAwarded} ⭐ в профиль)`
-      });
+    this.state.pointRecords.unshift({
+      id: 'pt-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+      studentId,
+      teacherId: 'admin',
+      type: 'add',
+      date: new Date().toISOString(),
+      points: result.award,
+      gameScore: result.score,
+      gameKey,
+      gameTitle,
+      category: 'Мини-игры',
+      comment: `🎮 ${gameTitle}: набрано ${result.score} (начислено +${result.award} ⭐ в профиль)`,
+      excludeFromRating: false
+    });
+    if (result.award > 0) {
+      student.totalPoints = Math.max(0, (student.totalPoints || 0) + result.award);
+      student.lifetimePoints = (student.lifetimePoints || 0) + result.award;
     }
-
-    const updatedWeeklyTotal = student.gameStats.weekly.points;
-    this.saveState();
+    this.saveState(true);
 
     return {
       pointsEarned: rawPoints,
-      pointsAwarded,
-      weeklyTotal: updatedWeeklyTotal,
-      weeklyLimit,
-      dailyStreak: streak,
-      streakBonus,
-      capReached: updatedWeeklyTotal >= weeklyLimit
+      pointsAwarded: result.award,
+      weeklyTotal: result.weeklyPoints,
+      weeklyLimit: result.weeklyLimit,
+      dailyStreak: result.dailyStreak,
+      streakBonus: result.streakBonus,
+      capReached: result.weeklyPoints >= result.weeklyLimit
     };
+  }
+
+  /** Server ledger, or the local preview of games the server has not confirmed yet */
+  effectiveGameLedger(student) {
+    const server = student.gameLedger && student.gameLedger.v === 2 ? student.gameLedger : migrateLedger(student.gameLedger, student.gameStats);
+    const local = this._gameOverlay.get(student.id);
+    if (local && local.n > (server.n || 0)) return local;
+    if (local) this._gameOverlay.delete(student.id);
+    return server;
   }
 
   unlockSecretTitle(studentId, titleName) {

@@ -4,6 +4,7 @@
 import { config } from './config.js';
 import { getStorage } from './storage/index.js';
 import { HttpError } from './http.js';
+import { playGame, migrateLedger } from '../../public/js/shared/gameStreak.js';
 import { hashPassword, derivePin } from './security.js';
 import {
   META_PATH, CREDS_PATH, SETTINGS, LIST_COLLS,
@@ -87,14 +88,6 @@ function masteredWordsFromPool(pool) {
   return out;
 }
 
-function isoWeekKey(date = new Date()) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
-}
 
 // ======================================================================
 // Bootstrap / import
@@ -438,17 +431,35 @@ function validateStudentPointRecord(rec, student, now) {
       out.excludeFromRating = true;
       return out;
     }
-    case 'Мини-игры': {
-      if (points > 100) return 'Слишком много баллов за одну игру';
-      const week = isoWeekKey(now);
-      const gl = (student.gameLedger && student.gameLedger.week === week) ? student.gameLedger : { week, pts: 0 };
-      if (gl.pts + points > 520) return 'Достигнут недельный лимит баллов за мини-игры';
-      student.gameLedger = { week, pts: gl.pts + points };
-      return out;
-    }
     default:
       return 'Ученик не может начислять баллы в категории «' + rec.category + '»';
   }
+}
+
+/**
+ * A finished mini-game: the server updates the streak / weekly limit and decides how many points to award.
+ * Returns the point record to store, or null when nothing is awarded (weekly limit reached, zero score).
+ */
+function applyMiniGame(rec, student, now) {
+  const score = Number.isFinite(Number(rec.gameScore)) ? Number(rec.gameScore) : Number(rec.points);
+  const base = migrateLedger(student.gameLedger, student.gameStats, now);
+  const result = playGame(base, score, now);
+  student.gameLedger = result.ledger;
+  if (result.award <= 0) return null;
+  const title = typeof rec.gameTitle === 'string' && rec.gameTitle ? rec.gameTitle.slice(0, 120) : '';
+  return {
+    ...rec,
+    studentId: student.id,
+    teacherId: 'admin',
+    type: 'add',
+    points: result.award,
+    gameScore: result.score,
+    excludeFromRating: Boolean(rec.excludeFromRating),
+    comment: title
+      ? `🎮 ${title}: набрано ${result.score} (начислено +${result.award} ⭐ в профиль)`
+      : String(rec.comment || '').slice(0, 300),
+    date: sameDay(rec.date, now, 2) ? rec.date : now.toISOString()
+  };
 }
 
 export async function push(user, rawOps) {
@@ -554,6 +565,10 @@ export async function push(user, rawOps) {
           selfStudentDirty = true;
           continue;
         }
+        if (op.t === 'put' && existing && existing.studentId === user.uid && (op.c === 'pointRecords' || op.c === 'purchases')) {
+          // Repeated send of a record that is already saved (e.g. the first response was lost): nothing to do
+          continue;
+        }
         if (op.t !== 'put' || existing) { reject(res, 'Можно только добавлять новые записи'); continue; }
         const v = isPlainObject(op.v) ? { ...op.v, id: op.id } : null;
         if (!v) { reject(res, 'Пустая запись'); continue; }
@@ -572,6 +587,15 @@ export async function push(user, rawOps) {
         }
         if (v.studentId !== user.uid) { reject(res, 'Запись принадлежит другому ученику'); continue; }
 
+        if (op.c === 'pointRecords' && v.category === 'Мини-игры') {
+          const rec = applyMiniGame(v, selfStudent, now);
+          selfStudentDirty = true;
+          if (rec) {
+            writeRow(key, op.id, rec);
+            addContribution(pointContribution(rec), +1);
+          }
+          continue;
+        }
         if (op.c === 'pointRecords') {
           const checked = validateStudentPointRecord(v, selfStudent, now);
           if (typeof checked === 'string') { reject(res, checked); continue; }

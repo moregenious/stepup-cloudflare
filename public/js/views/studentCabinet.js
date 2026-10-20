@@ -628,9 +628,7 @@ export const StudentCabinet = {
 
   bindEvents(container, student, group) {
     // Logout button
-    container.querySelector('.btn-app-logout')?.addEventListener('click', () => {
-      auth.logout();
-    });
+    // (handled by the global logout handler in app.js, which waits for unsaved changes)
 
     // Leaderboard controls listener (month select + group/school scope toggle)
     const bindLeaderboardEvents = () => {

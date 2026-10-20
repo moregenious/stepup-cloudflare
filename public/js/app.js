@@ -648,9 +648,11 @@ export class App {
       if (logoutBtn) {
         e.preventDefault();
         closeSidebar();
-        auth.logout();
-        toast.info('Вы вышли на главный экран');
-        window.location.hash = '#login';
+        auth.logout().then((done) => {
+          if (!done) return;
+          toast.info('Вы вышли на главный экран');
+          window.location.hash = '#login';
+        });
       }
     });
 
