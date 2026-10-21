@@ -1,3 +1,4 @@
+import { logServerEvent } from '../lib/events.js';
 import { json, readJson, route, HttpError } from '../lib/http.js';
 import { loginStaff, loginStudentPin, loginStudentQr, describeSession, logoutCookie } from '../lib/auth.js';
 
@@ -23,5 +24,6 @@ export const POST = route(async (request) => {
     default:
       throw new HttpError(400, 'Неизвестное действие');
   }
+  await logServerEvent({ role: result.body.role, uid: result.body.user?.id || 'admin' }, 'login', { via: body.action });
   return json(result.body, 200, { 'Set-Cookie': result.session.cookie });
 });

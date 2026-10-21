@@ -162,6 +162,24 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   assert.equal((await call('/api/auth', { body: { action: 'staff', login: 'admin', password: 'NewAdmin77' } })).status, 200);
   assert.equal((await call('/api/auth', { body: { action: 'staff', login: 'admin', password: 'AdminPass1' } })).status, 401);
 
+  // Analytics events: user comes from the session, junk is filtered, admin-only CSV export with pseudonyms
+  const ev = await call('/api/events', { cookie: student.cookie, body: { events: [
+    { t: 'page_view', ts: new Date().toISOString(), sid: 's1', gid: 'grp-a', p: { page: 'games' } },
+    { t: 'game_end', sid: 's1', p: { game: 'words', score: 8, nested: { x: 1 } } },
+    { t: 'DROP TABLE', p: {} },
+    { t: 'app_open', ts: '2001-01-01T00:00:00Z', p: { via: 'resume' } }
+  ] } });
+  assert.equal(ev.json.saved, 3, ev.text);
+  assert.equal((await call('/api/events', { body: { events: [{ t: 'x1' }] } })).status, 401);
+  assert.equal((await call('/api/events?from=2000-01-01', { method: 'GET', cookie: student.cookie })).status, 403);
+  const csv = await call('/api/events?anon=1', { method: 'GET', cookie: admin.cookie });
+  assert.equal(csv.status, 200);
+  assert.ok(csv.text.includes('game_end') && csv.text.includes('login'), csv.text);
+  assert.ok(!csv.text.includes('stu-1') && /u_[A-Za-z0-9_-]{10}/.test(csv.text), 'student ids are pseudonymised');
+  assert.ok(!csv.text.includes('nested') && !csv.text.includes('2001-01-01'), 'nested props dropped, old timestamps clamped');
+  const plain = await call('/api/events', { method: 'GET', cookie: admin.cookie });
+  assert.ok(plain.text.includes('stu-1'));
+
   // Backup export is a shard backup that can be converted back
   const exp = await call('/api/admin?action=export', { method: 'GET', cookie: admin.cookie });
   assert.equal(exp.json.format, 'stepup-shards-v1');

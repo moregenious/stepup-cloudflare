@@ -15,6 +15,7 @@
  */
 
 import { store } from '../store.js';
+import { trackGameOpen } from '../analytics.js';
 import { auth } from '../auth.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -202,6 +203,7 @@ export const GamesView = {
     container.querySelectorAll('.tab-game-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         this.activeTab = btn.dataset.game;
+        trackGameOpen(this.activeTab);
         // Reset sub-state for freshly selected game
         if (this.activeTab === 'words') this.wordsState = null;
         if (this.activeTab === 'irregular') this.irregularState = null;

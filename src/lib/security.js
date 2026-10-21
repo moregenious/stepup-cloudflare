@@ -127,3 +127,8 @@ export function derivePin(student) {
   }
   return String(Math.abs(hash) % 9000 + 1000);
 }
+
+/** Stable pseudonymous id for analytics exports (cannot be turned back into the real id without SESSION_SECRET) */
+export async function anonId(uid) {
+  return 'u_' + (await sign('anon:' + uid)).slice(0, 10);
+}

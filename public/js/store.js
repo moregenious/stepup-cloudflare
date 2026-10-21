@@ -5,6 +5,7 @@
 
 import { MONTH_NAMES } from './data/seedData.js';
 import { SyncEngine } from './sync.js';
+import { trackGameEnd } from './analytics.js';
 import { GAME_RULES, viewLedger, playGame, migrateLedger } from './shared/gameStreak.js';
 import { apiRequest, getServerConfig, onUnauthorized } from './api.js';
 import { logger } from './utils/logger.js';
@@ -3882,6 +3883,7 @@ class Store {
 
     const rawPoints = Math.max(0, Math.floor(Number(pointsEarned) || 0));
     if (rawPoints <= 0) {
+      trackGameEnd(gameKey, 0, 0);
       const g = viewLedger(this.effectiveGameLedger(student));
       return { pointsEarned: 0, pointsAwarded: 0, weeklyTotal: g.weeklyPoints, weeklyLimit: g.weeklyLimit, dailyStreak: g.dailyStreak, streakBonus: g.streakBonus, capReached: g.weeklyPoints >= g.weeklyLimit };
     }
@@ -3889,6 +3891,7 @@ class Store {
     // Same calculation the server makes; the server's answer replaces this preview
     const result = playGame(this.effectiveGameLedger(student), rawPoints);
     this._gameOverlay.set(studentId, result.ledger);
+    trackGameEnd(gameKey, result.score, result.award);
 
     this.state.pointRecords.unshift({
       id: 'pt-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),

@@ -3,6 +3,8 @@
  * Supports all audio formats (MP3, WMA, WAV, M4A, OGG, FLAC, AAC, WEBM, OPUS)
  */
 
+import { track } from '../analytics.js';
+
 export const AudioPlayer = {
   renderPlayerHtml(audioFile, uniqueId = 'player-' + Math.floor(Math.random() * 10000)) {
     const fileName = audioFile.name || 'Аудиозапись к уроку';
@@ -93,6 +95,16 @@ export const AudioPlayer = {
       const speedBtns = playerEl.querySelectorAll('.btn-speed');
       const slowdownBadge = playerEl.querySelector('.audio-slowdown-badge');
       const errorNotice = playerEl.querySelector('.audio-error-notice');
+
+      // Analytics: which lesson audio is listened to, to the end, and at what speed
+      const fileKey = decodeURIComponent(String(playerEl.dataset.src || '').split('/').pop() || '').slice(0, 120);
+      let playTracked = false;
+      audio.addEventListener('play', () => {
+        if (playTracked) return;
+        playTracked = true;
+        track('audio_play', { file: fileKey });
+      });
+      audio.addEventListener('ended', () => track('audio_end', { file: fileKey, rate: audio.playbackRate }));
 
       const formatTime = (secs) => {
         if (isNaN(secs) || !isFinite(secs)) return '0:00';
@@ -209,6 +221,7 @@ export const AudioPlayer = {
         btn.addEventListener('click', (e) => {
           const rate = parseFloat(e.currentTarget.getAttribute('data-rate'));
           setSpeed(rate);
+          track('audio_speed', { file: fileKey, rate });
         });
       });
 

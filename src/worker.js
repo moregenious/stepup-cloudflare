@@ -14,8 +14,9 @@ import * as push from './api/push.js';
 import * as files from './api/files.js';
 import * as admin from './api/admin.js';
 import * as cfg from './api/config.js';
+import * as events from './api/events.js';
 
-const API = { auth, state, push, files, admin, config: cfg };
+const API = { auth, state, push, files, admin, events, config: cfg };
 
 export default {
   async fetch(request, env) {

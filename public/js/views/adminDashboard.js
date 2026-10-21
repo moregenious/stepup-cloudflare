@@ -36,6 +36,7 @@ export const AdminDashboard = {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             Экспорт данных
           </button>
+          <button class="btn btn-outline-secondary btn-sm" id="btn-export-events" title="Выгрузить журнал действий учеников для анализа (CSV)">📊 События (CSV)</button>
           <button class="btn btn-outline-secondary btn-sm" id="btn-admin-password" title="Сменить пароль входа администратора">🔑 Пароль</button>
           <button class="btn btn-secondary btn-sm" id="btn-reset-data" title="Загрузить файл резервной копии (.json) и заменить им все данные">Восстановить из копии</button>
           <input type="file" id="input-restore-backup" accept=".json,application/json" style="display:none;">
@@ -293,6 +294,49 @@ export const AdminDashboard = {
       document.body.appendChild(a);
       a.click();
       a.remove();
+    });
+
+    document.getElementById('btn-export-events')?.addEventListener('click', () => {
+      const today = new Date();
+      const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+      modal.open({
+        title: 'Выгрузка событий для анализа',
+        bodyHtml: `
+          <form id="form-export-events">
+            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+              <div class="form-group" style="flex:1; min-width:140px;">
+                <label class="form-label">С</label>
+                <input type="date" name="from" class="form-control" value="${iso(new Date(today.getTime() - 30 * 86400000))}" required>
+              </div>
+              <div class="form-group" style="flex:1; min-width:140px;">
+                <label class="form-label">По</label>
+                <input type="date" name="to" class="form-control" value="${iso(today)}" required>
+              </div>
+            </div>
+            <label style="display:flex; gap:8px; align-items:center; margin-top:4px;">
+              <input type="checkbox" name="anon" checked> Обезличить (вместо ID учеников — псевдонимы)
+            </label>
+            <div class="form-hint" style="margin-top:8px;">Файл CSV открывается в Excel, Google Таблицах и Python (pandas). Для портфолио используйте только обезличенную выгрузку.</div>
+          </form>`,
+        footerHtml: `
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('main-modal').close()">Отмена</button>
+          <button type="submit" form="form-export-events" class="btn btn-primary">Скачать</button>`,
+        onOpen: () => {
+          document.getElementById('form-export-events')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const f = new FormData(e.target);
+            const q = new URLSearchParams({ from: String(f.get('from')), to: String(f.get('to')) });
+            if (f.get('anon')) q.set('anon', '1');
+            const a = document.createElement('a');
+            a.href = '/api/events?' + q.toString();
+            a.setAttribute('download', '');
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            modal.close();
+          });
+        }
+      });
     });
 
     document.getElementById('btn-admin-password')?.addEventListener('click', () => {

@@ -9,6 +9,7 @@ import { modal } from './components/modal.js';
 import { toast } from './components/toast.js';
 import { onCloudStatusChange } from './api.js';
 import { logger } from './utils/logger.js';
+import { track, setAnalyticsContext, deviceInfo } from './analytics.js';
 
 // Views
 import { AuthView } from './views/authView.js';
@@ -148,10 +149,18 @@ export class App {
     window.addEventListener('hashchange', () => {
       if (this.checkQrLogin()) return;
       this.currentHash = window.location.hash || (auth.isAuthenticated() ? '#dashboard' : '#login');
+      track('page_view', { page: this.currentHash.replace(/^#/, '').split(/[?&=]/)[0] });
       this.updateSidebarActiveState();
       this.updateMobileBottomBarActive();
       this.renderCurrentView(true);
     });
+
+    // Analytics: students' events carry their group; a page load with a saved session is a visit
+    setAnalyticsContext(() => (auth.isStudent() ? { gid: store.getStudentById(auth.currentStudentId)?.groupId } : {}));
+    if (auth.isAuthenticated()) {
+      track('app_open', { via: 'resume', ...deviceInfo() });
+      track('page_view', { page: (window.location.hash || '#dashboard').replace(/^#/, '').split(/[?&=]/)[0] });
+    }
 
     this.bindHeaderAndSidebarEvents();
     this.updateAppLayout();

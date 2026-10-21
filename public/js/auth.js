@@ -7,6 +7,7 @@
 
 import { store, normalizePhone, formatPhoneForDisplay } from './store.js';
 import { apiRequest } from './api.js';
+import { track, flush as flushAnalytics, deviceInfo } from './analytics.js';
 
 class Auth {
   constructor() {
@@ -97,6 +98,7 @@ class Auth {
       this.applySession(res.role, res.user?.id);
       // Wait for the first data load so the cabinet opens with data
       await Promise.race([store.whenReady(), new Promise(r => setTimeout(r, 15000))]);
+      track('app_open', { via: payload.action, ...deviceInfo() });
       return { success: true, role: res.role, message: res.message, student: res.role === 'student' ? store.getStudentById(res.user?.id) : undefined };
     } catch (err) {
       return {
@@ -181,6 +183,8 @@ class Auth {
             return false;
           }
         }
+        track('logout');
+        await flushAnalytics();
         apiRequest('/api/auth', { body: { action: 'logout' } }).catch(() => {});
         this.forceLogout();
         return true;
