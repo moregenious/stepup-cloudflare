@@ -4115,7 +4115,9 @@ class Store {
     }
 
     // Meta check: Unlocking 5 secret titles awards "легенда мини-игр"
-    if (Array.isArray(student.unlockedTitles) && student.unlockedTitles.length >= 5) {
+    const SECRET_NAMES = ['знаток слов', 'знаток irregular', 'знаток conditional', 'архитектор условий', 'повелитель времён', 'гений времён', 'мастер предложений', 'повелитель предлогов', 'знаток phrasal verbs', 'грамматический детектив', 'спринтер слов'];
+    const secretCount = Array.isArray(student.unlockedTitles) ? student.unlockedTitles.filter(t => SECRET_NAMES.includes(t)).length : 0;
+    if (secretCount >= 5) {
       const unlockedLegend = this.unlockSecretTitle(studentId, 'легенда мини-игр');
       if (unlockedLegend) {
         newTitleUnlocked = newTitleUnlocked || 'легенда мини-игр';

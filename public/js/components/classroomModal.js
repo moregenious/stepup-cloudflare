@@ -138,7 +138,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
             </div>
 
             <div style="background:rgba(255,255,255,0.08); padding:8px 12px; border-radius:var(--radius-md); border:1px solid rgba(255,255,255,0.12);">
-              <div style="font-size:0.7rem; color:#c7d2fe; text-transform:uppercase; font-weight:700;">🎮 Игры недели (лимит 100 ⭐)</div>
+              <div style="font-size:0.7rem; color:#c7d2fe; text-transform:uppercase; font-weight:700;">🎮 Игры недели</div>
               <div style="font-size:0.95rem; font-weight:800; color:#67e8f9;">
                 ${activeGamers} из ${students.length} играют
               </div>
@@ -185,7 +185,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
 
         <!-- Tab 1: Leaderboard View (Default) -->
         ${activeTab === 'leaderboard' ? `
-          <div class="classroom-leaderboard-list" style="display:flex; flex-direction:column; gap:8px; max-height:460px; overflow-y:auto; padding-right:4px;">
+          <div class="classroom-leaderboard-list cls-inner-scroll" style="display:flex; flex-direction:column; gap:8px; max-height:460px; overflow-y:auto; padding-right:4px;">
             ${studentStats.length === 0 ? `
               <div style="text-align:center; padding:32px 16px; color:var(--color-text-muted);">
                 <div style="font-size:2rem; margin-bottom:6px;">👥</div>
@@ -293,7 +293,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
 
         <!-- Tab 2: Detailed Mini-Games Tracker View -->
         ${activeTab === 'games' ? `
-          <div style="display:flex; flex-direction:column; gap:10px; max-height:460px; overflow-y:auto; padding-right:4px;">
+          <div class="cls-inner-scroll" style="display:flex; flex-direction:column; gap:10px; max-height:460px; overflow-y:auto; padding-right:4px;">
             <div style="background:var(--color-bg-app); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:10px 14px; font-size:var(--font-size-xs); color:var(--color-text-secondary);">
               ℹ️ <strong>Система лимитов:</strong> Каждый ученик может заработать максимум <strong>100 ⭐ в неделю</strong> в мини-играх и тренажерах (слова, неправильные глаголы, времена). Лимит сбрасывается каждый понедельник. Это мотивирует детей тренироваться регулярно, не допуская накрутки.
             </div>
@@ -444,7 +444,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
                 </div>
 
                 <!-- Scrollable Lessons Grid for Selected Month -->
-                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:10px; max-height:410px; overflow-y:auto; padding-right:4px;">
+                <div class="cls-inner-scroll cls-lessons-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap:10px; max-height:410px; overflow-y:auto; padding-right:4px;">
                   ${monthLessons.map(l => {
                     const isConducted = store.isLessonConductedForGroup(freshGroup.id, selectedLessonMonth, l.lessonNumber);
                     const wordsCount = Array.isArray(l.vocabulary) ? l.vocabulary.length : 0;
@@ -506,7 +506,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
 
         <!-- Tab 4: Group Schedule & Lessons -->
         ${activeTab === 'schedule' ? `
-          <div style="display:flex; flex-direction:column; gap:8px; max-height:460px; overflow-y:auto; padding-right:4px;">
+          <div class="cls-inner-scroll" style="display:flex; flex-direction:column; gap:8px; max-height:460px; overflow-y:auto; padding-right:4px;">
             ${lessons.length === 0 ? `
               <div style="text-align:center; padding:32px 16px; color:var(--color-text-muted);">
                 <div style="font-size:2rem; margin-bottom:6px;">📅</div>

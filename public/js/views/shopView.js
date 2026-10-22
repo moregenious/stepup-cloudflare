@@ -10,7 +10,7 @@ import { store } from '../store.js';
 import { auth } from '../auth.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
-import { PRESET_EMOJIS, AVAILABLE_FRAMES, AVAILABLE_TITLES, SECRET_TITLES, renderStudentAvatarHtml } from '../components/avatarCustomization.js';
+import { PRESET_EMOJIS, AVAILABLE_FRAMES, AVAILABLE_TITLES, SECRET_TITLES, renderStudentAvatarHtml, titlePrice, getUnlockedSecretTitles } from '../components/avatarCustomization.js';
 
 export const ShopView = {
   activeTab: 'customization', // 'customization' | 'staff' | 'purchases'
@@ -139,7 +139,7 @@ export const ShopView = {
             <span>🖼️ Рамки профиля (100 ⭐)</span>
           </button>
           <button type="button" class="btn btn-sm ${this.subCustomTab === 'titles' ? 'btn-primary' : 'btn-secondary'} sub-custom-tab" data-sub="titles" style="font-weight: 700;">
-            <span>👑 Титулы (150 ⭐)</span>
+            <span>👑 Титулы (от 150 ⭐)</span>
           </button>
 
           <div style="margin-left: auto; font-size: var(--font-size-xs); color: var(--color-text-muted);">
@@ -207,8 +207,39 @@ export const ShopView = {
             }).join('')}
           </div>
         ` : `
+          ${(() => {
+            const earned = getUnlockedSecretTitles(student);
+            if (!earned.length) return '';
+            return `
+              <div style="margin-bottom: var(--space-4);">
+                <div style="font-weight: 800; font-size: 0.9rem; color: #b45309; margin-bottom: var(--space-2);">🏆 Ваши секретные титулы (заработаны в мини-играх)</div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: var(--space-3);">
+                  ${earned.map(t => {
+                    const fullTitle = `${t.icon} ${t.text}`;
+                    const isEquipped = student?.studentTitle === fullTitle;
+                    return `
+                      <div class="card" style="padding: var(--space-4); border: 1.5px solid ${isEquipped ? '#4f46e5' : '#f59e0b'}; border-radius: var(--radius-lg); background: #fffbeb; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                        <div>
+                          <div style="font-weight: 700; font-size: 0.95rem; color: #92400e; display: flex; align-items: center; gap: 6px;">
+                            <span>${t.icon}</span> <span>${t.text}</span>
+                          </div>
+                          <div style="font-size: 0.72rem; margin-top: 2px; color: #b45309;">${isEquipped ? '<span style="color:#4f46e5; font-weight:700;">✓ Выбран</span>' : t.desc}</div>
+                        </div>
+                        ${isEquipped ? `
+                          <button type="button" class="btn btn-xs btn-ghost" disabled style="font-weight: 700;">Активен</button>
+                        ` : `
+                          <button type="button" class="btn btn-xs btn-outline btn-equip-custom" data-type="title" data-id="${fullTitle}" style="font-weight: 700;">Выбрать</button>
+                        `}
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            `;
+          })()}
+
           <!-- Titles Grid -->
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-3);">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: var(--space-3);">
             ${AVAILABLE_TITLES.map(t => {
               const fullTitle = `${t.icon} ${t.text}`;
               const isUnlocked = unlockedTitles.some(ut => ut.includes(t.text));
@@ -220,7 +251,7 @@ export const ShopView = {
                       <span>${t.icon}</span> <span>${t.text}</span>
                     </div>
                     <div style="font-size: 0.72rem; margin-top: 2px;">
-                      ${isEquipped ? '<span style="color:#4f46e5; font-weight:700;">✓ Выбран</span>' : isUnlocked ? '<span style="color:#16a34a; font-weight:700;">✓ В коллекции</span>' : '<span style="color:#b45309; font-weight:700;">150 ⭐</span>'}
+                      ${isEquipped ? '<span style="color:#4f46e5; font-weight:700;">✓ Выбран</span>' : isUnlocked ? '<span style="color:#16a34a; font-weight:700;">✓ В коллекции</span>' : `<span style="color:#b45309; font-weight:700;">${titlePrice(t)} ⭐</span>`}
                     </div>
                   </div>
                   ${isEquipped ? `
@@ -228,8 +259,8 @@ export const ShopView = {
                   ` : isUnlocked ? `
                     <button type="button" class="btn btn-xs btn-outline btn-equip-custom" data-type="title" data-id="${fullTitle}" style="font-weight: 700;">Выбрать</button>
                   ` : `
-                    <button type="button" class="btn btn-xs btn-primary btn-buy-custom" data-type="title" data-id="${t.text}" data-name="${t.text}" data-price="150" data-icon="${t.icon}" style="font-weight: 700; white-space: nowrap;">
-                      Купить (150 ⭐)
+                    <button type="button" class="btn btn-xs btn-primary btn-buy-custom" data-type="title" data-id="${t.text}" data-name="${t.text}" data-price="${titlePrice(t)}" data-icon="${t.icon}" style="font-weight: 700; white-space: nowrap;">
+                      Купить (${titlePrice(t)} ⭐)
                     </button>
                   `}
                 </div>
@@ -246,7 +277,7 @@ export const ShopView = {
                   Секретные титулы не продаются за баллы!
                 </div>
                 <div style="font-size: 0.8rem; color: #92400e; margin-top: 2px;">
-                  12 секретных титулов можно открыть только за победные серии (3 победы 10/10 подряд) и особые достижения в 9 интерактивных мини-играх. Проверяйте свои силы в разделе «🎮 Мини-игры»!
+                  ${SECRET_TITLES.length} секретных титулов можно открыть только за победные серии (3 победы 10/10 подряд) и особые достижения в 9 интерактивных мини-играх. Проверяйте свои силы в разделе «🎮 Мини-игры»!
                 </div>
               </div>
             </div>

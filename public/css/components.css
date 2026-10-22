@@ -860,3 +860,12 @@ dialog.app-modal::backdrop {
 }
 
 
+
+/* Classroom modal on phones/tablets: no scroll areas inside the scrolling modal
+   (nested scrolling traps the finger on touch screens) — the whole modal scrolls instead */
+@media (max-width: 900px), (pointer: coarse) {
+  .cls-inner-scroll {
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+}

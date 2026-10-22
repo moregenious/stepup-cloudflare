@@ -29,8 +29,18 @@ export const AVAILABLE_TITLES = [
   { text: 'Генератор вопросов', icon: '❓' },
   { text: 'Слушатель на 100%', icon: '🎧' },
   { text: 'Повелитель неправильных глаголов', icon: '⚔️' },
-  { text: 'Будущий полиглот', icon: '🚀' }
+  { text: 'Будущий полиглот', icon: '🚀' },
+  { text: 'six-seven', icon: '6️⃣7️⃣', price: 500 }
 ];
+
+export const DEFAULT_TITLE_PRICE = 150;
+export const titlePrice = (t) => (t && t.price) || DEFAULT_TITLE_PRICE;
+
+/** Secret titles this student has earned in mini-games (bought titles are not included) */
+export function getUnlockedSecretTitles(student) {
+  const owned = Array.isArray(student?.unlockedTitles) ? student.unlockedTitles : [];
+  return SECRET_TITLES.filter(s => owned.includes(s.text));
+}
 
 export const SECRET_TITLES = [
   { text: 'знаток слов', icon: '📖', desc: 'Награда за 3 победы 10/10 подряд в тесте по словам' },
@@ -239,7 +249,7 @@ export function openCustomizationModal(student, onSave = null) {
         </h4>
 
         ${(() => {
-          const unlockedSecretTitles = (student.id ? store.getStudentGameProgress(student.id).unlockedSecretTitles : []) || [];
+          const unlockedSecretTitles = getUnlockedSecretTitles(student).map(s => s.text);
           if (unlockedSecretTitles.length > 0) {
             return `
               <div style="margin-bottom: var(--space-3); background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(217, 119, 6, 0.2) 100%); border: 1.5px solid #f59e0b; padding: var(--space-3); border-radius: var(--radius-md);">
@@ -277,7 +287,7 @@ export function openCustomizationModal(student, onSave = null) {
 
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: var(--font-size-xs); color: var(--color-text-muted); margin-bottom: var(--space-2);">
           <span>Стандартные титулы:</span>
-          <span style="color: #2563eb; font-weight: 700;">Цена: 150 ⭐</span>
+          <span style="color: #2563eb; font-weight: 700;">Цена: от 150 ⭐</span>
         </div>
 
         <div class="titles-selection-wrap">
@@ -288,10 +298,10 @@ export function openCustomizationModal(student, onSave = null) {
             const isUnlocked = unlockedTitles.some(ut => ut.includes(t.text));
             const isSelected = draft.studentTitle.includes(t.text);
             return `
-              <button type="button" class="title-choice-chip ${isSelected ? 'selected' : ''} ${!isUnlocked ? 'locked-title-chip' : ''}" data-title="${t.icon} ${t.text}" data-title-name="${t.text}" data-title-icon="${t.icon}" data-unlocked="${isUnlocked ? '1' : '0'}">
+              <button type="button" class="title-choice-chip ${isSelected ? 'selected' : ''} ${!isUnlocked ? 'locked-title-chip' : ''}" data-title="${t.icon} ${t.text}" data-title-name="${t.text}" data-title-icon="${t.icon}" data-title-price="${titlePrice(t)}" data-unlocked="${isUnlocked ? '1' : '0'}">
                 <span>${t.icon}</span>
                 <span>${t.text}</span>
-                ${!isUnlocked ? `<span style="font-size: 0.65rem; color: #b45309; background: #fef3c7; padding: 1px 5px; border-radius: 6px; font-weight: 800; margin-left: 4px;">🔒 150 ⭐</span>` : ''}
+                ${!isUnlocked ? `<span style="font-size: 0.65rem; color: #b45309; background: #fef3c7; padding: 1px 5px; border-radius: 6px; font-weight: 800; margin-left: 4px;">🔒 ${titlePrice(t)} ⭐</span>` : ''}
               </button>
             `;
           }).join('')}
@@ -479,7 +489,7 @@ export function openCustomizationModal(student, onSave = null) {
           const titleIcon = chip.dataset.titleIcon || '🏷️';
 
           if (!isUnlocked) {
-            promptBuyItem('title', titleName, `Титул «${titleName}»`, 150, titleIcon);
+            promptBuyItem('title', titleName, `Титул «${titleName}»`, Number(chip.dataset.titlePrice) || DEFAULT_TITLE_PRICE, titleIcon);
             return;
           }
 
