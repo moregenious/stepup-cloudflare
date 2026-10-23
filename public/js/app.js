@@ -24,6 +24,7 @@ import { TeacherCabinet } from './views/teacherCabinet.js';
 import { StudentCabinet } from './views/studentCabinet.js';
 import { VocabularyView } from './views/vocabularyView.js';
 import { PaymentsView } from './views/paymentsView.js';
+import { AttendanceView } from './views/attendanceView.js';
 import { GamesView } from './views/gamesView.js';
 import { ShopView } from './views/shopView.js';
 import { HomeworkView } from './views/homeworkView.js';
@@ -324,6 +325,10 @@ export class App {
           <span class="nav-item-icon">💳</span>
           <span>Оплата обучения</span>
         </a>
+        <a href="#attendance" class="nav-item ${this.currentHash === '#attendance' ? 'active' : ''}">
+          <span class="nav-item-icon">📅</span>
+          <span>Посещаемость</span>
+        </a>
         <a href="#games" class="nav-item ${this.currentHash === '#games' ? 'active' : ''}">
           <span class="nav-item-icon">🎮</span>
           <span>Мини-игры</span>
@@ -374,6 +379,10 @@ export class App {
         <a href="#payments" class="nav-item ${this.currentHash === '#payments' ? 'active' : ''}">
           <span class="nav-item-icon">💳</span>
           <span>Оплата обучения</span>
+        </a>
+        <a href="#attendance" class="nav-item ${this.currentHash === '#attendance' ? 'active' : ''}">
+          <span class="nav-item-icon">📅</span>
+          <span>Посещаемость</span>
         </a>
         <a href="#scoring" class="nav-item ${this.currentHash === '#scoring' ? 'active' : ''}">
           <span class="nav-item-icon">⭐</span>
@@ -792,6 +801,9 @@ export class App {
           break;
         case '#payments':
           PaymentsView.render(container);
+          break;
+        case '#attendance':
+          AttendanceView.render(container);
           break;
         default:
           AdminDashboard.render(container);

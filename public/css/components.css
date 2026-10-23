@@ -917,11 +917,35 @@ dialog.app-modal::backdrop {
 .lm-modal-pills { display: flex; flex-wrap: wrap; gap: 6px; }
 .lm-journal-table { border-collapse: collapse; font-size: 0.8rem; min-width: 100%; }
 .lm-journal-table th, .lm-journal-table td { border: 1px solid var(--color-border); padding: 4px 6px; text-align: center; white-space: nowrap; }
-.lm-journal-table th:first-child, .lm-j-name { text-align: left; position: sticky; left: 0; background: var(--color-bg-card); }
+.lm-journal-table th:first-child, .lm-journal-table td.lm-j-name { text-align: left; position: sticky; left: 0; background: var(--color-bg-card); }
 .lm-j.ok { color: #15803d; font-weight: 800; background: #f0fdf4; }
 .lm-j.no { color: #b91c1c; font-weight: 800; background: #fef2f2; }
 .lm-j-pct { font-weight: 700; }
 @media (max-width: 600px) {
   .lm-row { padding: 8px; }
-  .lm-actions { flex-basis: 100%; margin-left: 0; padding-left: 46px; box-sizing: border-box; }
+  .lm-actions { flex-basis: 100%; margin-left: 0; padding-left: 46px; box-sizing: border-box; order: 4; }
+  .lm-paycell { order: 3; }
+}
+
+/* ===== Attendance section ===== */
+.att-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+.att-stat { background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: 12px; padding: 12px 14px; }
+.att-stat-num { font-size: 1.5rem; font-weight: 800; color: var(--color-text-main); }
+.att-stat-label { font-size: 0.75rem; color: var(--color-text-muted); }
+.att-table th { font-size: 0.75rem; }
+.att-dow { font-weight: 400; color: var(--color-text-muted); font-size: 0.68rem; }
+.att-cell { cursor: pointer; min-width: 34px; }
+.att-cell:hover { outline: 2px solid #a5b4fc; outline-offset: -2px; }
+.att-absences { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
+.lm-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lm-tab.deduct.on { background: #dc2626; }
+.lm-tab.add.on { background: #16a34a; }
+.lm-pt.minus { border-color: #fca5a5; background: #fef2f2; color: #b91c1c; }
+.lm-paid-info { font-size: 0.75rem; color: var(--color-text-secondary); }
+.lm-pay { height: 34px; min-width: 50px; padding: 0 10px; }
+
+.lm-att { order: 1; } .lm-name { order: 2; } .lm-actions { order: 3; } .lm-paycell { order: 4; flex-shrink: 0; }
+@media (max-width: 600px) {
+  .lm-paycell { order: 3; }
+  .lm-actions { order: 4; }
 }

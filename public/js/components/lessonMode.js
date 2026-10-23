@@ -10,13 +10,21 @@ import { toast } from './toast.js';
 import { modal } from './modal.js';
 import { SCORING_TEMPLATES } from '../views/scoringView.js';
 
-const QUICK = [
-  { short: '+10', label: 'Хороший ответ', points: 10, category: 'Активность', icon: '👍' },
-  { short: '+15', label: 'Хорошая работа на уроке', points: 15, category: 'Активность', icon: '⭐' },
-  { short: '+20 ДЗ', label: 'Домашнее задание', points: 20, category: 'Домашнее задание', icon: '📝' }
-];
+const QUICK = {
+  add: [
+    { short: '+10', label: 'Хороший ответ', points: 10, category: 'Активность', icon: '👍' },
+    { short: '+15', label: 'Хорошая работа на уроке', points: 15, category: 'Активность', icon: '⭐' },
+    { short: '+20 ДЗ', label: 'Домашнее задание', points: 20, category: 'Домашнее задание', icon: '📝' }
+  ],
+  deduct: [
+    { short: '−10 отвл.', label: 'Отвлекался', points: 10, category: 'Нарушение правил', icon: '👀' },
+    { short: '−15 тел.', label: 'Использование телефона', points: 15, category: 'Использование телефона', icon: '📱' },
+    { short: '−20 нет ДЗ', label: 'Не выполнил дом задание', points: 20, category: 'Несданное ДЗ', icon: '❌' }
+  ]
+};
 
-const ui = { mode: 'points', lastAction: null };
+// mode: 'add' | 'deduct' — which buttons the rows show
+const ui = { mode: 'add', lastAction: null };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -42,17 +50,14 @@ export function renderLessonModeHtml(ctx) {
     const today = todayPointsBy(st.id);
     const payment = store.getPayment(st.id, currMonth.key);
     const isPaid = payment && payment.status === 'paid';
-    let actions;
-    if (ui.mode === 'payments') {
-      actions = isPaid
-        ? `<button type="button" class="lm-pay paid" data-sid="${st.id}" data-action="unpaid" title="Нажмите, чтобы отменить отметку">✓ Оплачено</button>`
-        : `<button type="button" class="lm-pay" data-sid="${st.id}" data-action="paid" title="Отметить оплату за ${esc(currMonth.name)}">💳 Принять оплату</button>`;
-    } else if (isAbsent) {
-      actions = `<span class="lm-absent-note">отсутствует</span><button type="button" class="lm-pt lm-more" data-sid="${st.id}" title="Все категории и свои баллы">…</button>`;
-    } else {
-      actions = QUICK.map((q, i) => `<button type="button" class="lm-pt" data-sid="${st.id}" data-q="${i}" title="${esc(q.label)}">${q.short}</button>`).join('')
-        + `<button type="button" class="lm-pt lm-more" data-sid="${st.id}" title="Все категории, списание, свои баллы">…</button>`;
-    }
+    const quick = QUICK[ui.mode];
+    const payBtn = isPaid
+      ? `<button type="button" class="lm-pay paid" data-sid="${st.id}" data-action="unpaid" title="Оплачено за ${esc(currMonth.name)}. Нажмите, чтобы отменить">💳 ✓</button>`
+      : `<button type="button" class="lm-pay" data-sid="${st.id}" data-action="paid" title="Не оплачено за ${esc(currMonth.name)}. Нажмите, чтобы отметить оплату">💳 ✗</button>`;
+    const actions = (isAbsent
+      ? `<span class="lm-absent-note">отсутствует</span>`
+      : quick.map((q, i) => `<button type="button" class="lm-pt ${ui.mode === 'deduct' ? 'minus' : ''}" data-sid="${st.id}" data-q="${i}" title="${esc(q.label)}">${q.short}</button>`).join(''))
+      + `<button type="button" class="lm-pt lm-more" data-sid="${st.id}" title="Все категории и свои баллы">…</button>`;
     return `
       <div class="lm-row ${isAbsent ? 'is-absent' : ''}" data-sid="${st.id}">
         <div class="lm-att" role="group" aria-label="Посещаемость">
@@ -61,14 +66,17 @@ export function renderLessonModeHtml(ctx) {
         </div>
         <div class="lm-name">
           <div class="lm-fullname">${esc(st.fullName)}</div>
-          <div class="lm-sub">${st.totalPoints || 0} ⭐${today ? ` · <span class="${today > 0 ? 'lm-plus' : 'lm-minus'}">сегодня ${today > 0 ? '+' : ''}${today}</span>` : ''}${ui.mode !== 'payments' && !isPaid ? ' · <span class="lm-unpaid" title="Не оплачено за текущий месяц">💳</span>' : ''}</div>
+          <div class="lm-sub">${st.totalPoints || 0} ⭐${today ? ` · <span class="${today > 0 ? 'lm-plus' : 'lm-minus'}">сегодня ${today > 0 ? '+' : ''}${today}</span>` : ''}</div>
         </div>
         <div class="lm-actions">${actions}</div>
+        <div class="lm-paycell">${payBtn}</div>
       </div>`;
   }).join('');
 
-  const groupPills = SCORING_TEMPLATES.add.filter(t => !t.excludeFromRating).slice(0, 5)
-    .map((t, i) => `<button type="button" class="lm-group-pill" data-gi="${i}" title="${esc(t.label)}: всем, кроме отсутствующих">${t.icon} ${esc(t.label)} <b>+${t.points}</b></button>`).join('');
+  const isDeduct = ui.mode === 'deduct';
+  const groupPills = SCORING_TEMPLATES[ui.mode].filter(t => !t.excludeFromRating).slice(0, 5)
+    .map((t, i) => `<button type="button" class="lm-group-pill ${isDeduct ? 'deduct' : ''}" data-gi="${i}" title="${esc(t.label)}: всем, кроме отсутствующих">${t.icon} ${esc(t.label)} <b>${isDeduct ? '−' : '+'}${t.points}</b></button>`).join('');
+  const paidCount = students.filter(s => (store.getPayment(s.id, currMonth.key) || {}).status === 'paid').length;
 
   return `
     <div class="lesson-mode">
@@ -86,22 +94,23 @@ export function renderLessonModeHtml(ctx) {
         </div>
       </div>
 
-      <div class="lm-tabs">
-        <button type="button" class="lm-tab ${ui.mode === 'points' ? 'on' : ''}" data-mode="points">⭐ Баллы</button>
-        <button type="button" class="lm-tab ${ui.mode === 'payments' ? 'on' : ''}" data-mode="payments">💳 Оплата (${esc(currMonth.name)})</button>
+      <div class="lm-toolbar">
+        <div class="lm-tabs">
+          <button type="button" class="lm-tab add ${!isDeduct ? 'on' : ''}" data-mode="add">➕ Начислить</button>
+          <button type="button" class="lm-tab deduct ${isDeduct ? 'on' : ''}" data-mode="deduct">➖ Списать</button>
+        </div>
+        <span class="lm-paid-info" title="Оплата за ${esc(currMonth.name)}: кнопка 💳 в строке ученика">💳 Оплатили за ${esc(currMonth.name)}: <b>${paidCount} из ${students.length}</b></span>
       </div>
 
-      ${ui.mode === 'points' ? `
-        <div class="lm-group">
-          <span class="lm-group-label">Всем, кроме отсутствующих:</span>
-          ${groupPills}
-          <button type="button" class="lm-group-pill lm-group-more">Ещё / свои…</button>
-        </div>
-      ` : ''}
+      <div class="lm-group">
+        <span class="lm-group-label">${isDeduct ? 'Списать всем' : 'Всем'}, кроме отсутствующих:</span>
+        ${groupPills}
+        <button type="button" class="lm-group-pill lm-group-more">Ещё / свои…</button>
+      </div>
 
       ${ui.lastAction ? `
         <div class="lm-undo">
-          <span>Начислено: ${esc(ui.lastAction.text)}</span>
+          <span>${esc(ui.lastAction.text)}</span>
           <button type="button" class="btn btn-xs btn-ghost lm-undo-btn">↩ Отменить</button>
         </div>
       ` : ''}
@@ -147,17 +156,20 @@ export function bindLessonMode(root, ctx, { rerender, openStudentModal }) {
   }));
 
   root.querySelectorAll('.lm-pt[data-q]').forEach(btn => btn.addEventListener('click', () => {
-    const q = QUICK[Number(btn.dataset.q)];
+    const type = ui.mode;
+    const q = QUICK[type][Number(btn.dataset.q)];
     const sid = btn.dataset.sid;
-    award([{ studentId: sid, teacherId, points: q.points, type: 'add', category: q.category, comment: q.label }], `${q.short} «${q.label}» — ${studentName(sid)}`);
+    const sign = type === 'deduct' ? '−' : '+';
+    award([{ studentId: sid, teacherId, points: q.points, type, category: q.category, comment: q.label }], `${sign}${q.points} «${q.label}» — ${studentName(sid)}`);
   }));
 
-  root.querySelectorAll('.lm-more').forEach(btn => btn.addEventListener('click', () => openStudentModal(btn.dataset.sid)));
+  root.querySelectorAll('.lm-more').forEach(btn => btn.addEventListener('click', () => openStudentModal(btn.dataset.sid, ui.mode)));
 
   root.querySelectorAll('.lm-group-pill[data-gi]').forEach(btn => btn.addEventListener('click', () => {
-    const t = SCORING_TEMPLATES.add.filter(x => !x.excludeFromRating)[Number(btn.dataset.gi)];
-    const items = students.map(s => ({ studentId: s.id, teacherId, points: t.points, type: 'add', category: t.category, comment: `${t.label} (группа ${group.name})` }));
-    award(items, `+${t.points} «${t.label}» — всей группе`);
+    const type = ui.mode;
+    const t = SCORING_TEMPLATES[type].filter(x => !x.excludeFromRating)[Number(btn.dataset.gi)];
+    const items = students.map(s => ({ studentId: s.id, teacherId, points: t.points, type, category: t.category, comment: `${t.label} (группа ${group.name})` }));
+    award(items, `${type === 'deduct' ? '−' : '+'}${t.points} «${t.label}» — всей группе`);
   }));
 
   root.querySelector('.lm-group-more')?.addEventListener('click', () => openGroupAwardModal(ctx, award));

@@ -636,9 +636,9 @@ export const TeacherCabinet = {
       const lmRender = () => {
         lmCtx.students = store.getStudentsByGroupId(activeGroup.id);
         lmMount.innerHTML = renderLessonModeHtml(lmCtx);
-        bindLessonMode(lmMount, lmCtx, { rerender: lmRender, openStudentModal: (sid) => this.openStudentScoringModal(sid, 'add', container) });
+        bindLessonMode(lmMount, lmCtx, { rerender: lmRender, openStudentModal: (sid, mode) => this.openStudentScoringModal(sid, mode === 'deduct' ? 'deduct' : 'add', container) });
       };
-      bindLessonMode(lmMount, lmCtx, { rerender: lmRender, openStudentModal: (sid) => this.openStudentScoringModal(sid, 'add', container) });
+      bindLessonMode(lmMount, lmCtx, { rerender: lmRender, openStudentModal: (sid, mode) => this.openStudentScoringModal(sid, mode === 'deduct' ? 'deduct' : 'add', container) });
     }
 
     // Active Group Selector
