@@ -2,7 +2,7 @@
  * Student Personal Cabinet View - Textbook Homework, Audio with Slowdown, Vocabulary (no voice synth), and Schedule
  */
 
-import { store } from '../store.js';
+import { store, formatGrade } from '../store.js';
 import { auth } from '../auth.js';
 import { modal } from '../components/modal.js';
 import { AudioPlayer } from '../components/audioPlayer.js';
@@ -239,7 +239,7 @@ export const StudentCabinet = {
                           <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                             <span class="font-semibold">${item.fullName}</span>
                             ${isMe ? '<span class="badge badge-completed" style="font-size:0.65rem;">Это вы</span>' : ''}
-                            ${itemGroup ? `<span class="badge" style="font-size:0.65rem; background:#e0e7ff; color:#3730a3;">${itemGroup.name}</span>` : `<span class="text-xs text-muted">(${item.grade || 'Ученик'})</span>`}
+                            ${itemGroup ? `<span class="badge" style="font-size:0.65rem; background:#e0e7ff; color:#3730a3;">${itemGroup.name}</span>` : `<span class="text-xs text-muted">(${formatGrade(item.grade) || 'Ученик'})</span>`}
                           </div>
                           ${itemStudent?.studentTitle ? `
                             <div style="margin-top:2px;">
@@ -317,7 +317,10 @@ export const StudentCabinet = {
     const group = store.getGroupById(student.groupId);
 
     const mySchedule = store.getSchedule({ studentId: student.id });
-    const myPoints = store.getPointRecords(student.id);
+    // Mini-game rounds are not shown in the history (parents need lesson reasons); only their weekly total
+    const allMyPoints = store.getPointRecords(student.id);
+    const myPoints = allMyPoints.filter(p => p.category !== 'Мини-игры');
+    const gameWeek = store.getStudentGameProgress(student.id);
 
     const textbookName = student.textbook || (group ? group.textbook : '');
     const unlockedLesson = store.getLatestUnlockedLessonForStudent(student.id);
@@ -452,7 +455,7 @@ export const StudentCabinet = {
               📊 Посещаемость: <strong>${attStats.percentage}%</strong> (${attStats.attended}/${attStats.total} уроков)
             </div>
             <div style="background: rgba(255,255,255,0.15); padding: var(--space-2) var(--space-4); border-radius: var(--radius-full); font-size: var(--font-size-sm);">
-              🏫 ${student.grade}, ${student.school} (${student.shift} смена)
+              🏫 ${formatGrade(student.grade)}, ${student.school} (${student.shift} смена)
             </div>
             <div style="background: rgba(255,255,255,0.22); padding: var(--space-2) var(--space-4); border-radius: var(--radius-full); font-size: var(--font-size-sm); border: 1px solid rgba(255,255,255,0.3);" title="Ваш личный 4-значный PIN-код для входа">
               🔑 Твой PIN-код: <strong style="font-family:monospace; letter-spacing:0.1em;">${store.getStudentPin(student)}</strong>
@@ -516,7 +519,7 @@ export const StudentCabinet = {
         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2);">
           <div>
             <h3 class="card-title">📝 История начисления баллов</h3>
-            <p class="card-subtitle">Все начисления и бонусы за активность, ДЗ, анкету и праздники</p>
+            <p class="card-subtitle">Начисления и списания на уроках, за ДЗ, анкету и праздники${gameWeek.weeklyPoints ? ` • 🎮 Мини-игры на этой неделе: +${gameWeek.weeklyPoints} ⭐` : ''}</p>
           </div>
           <div style="font-size: var(--font-size-xs); color: var(--color-text-muted); background: var(--color-bg-app); padding: 4px 12px; border-radius: var(--radius-full); border: 1px solid var(--color-border); font-weight: 600;">
             Всего записей: <strong>${myPoints.length}</strong>

@@ -2,7 +2,7 @@
  * Teacher Personal Cabinet View - Groups, Personal Schedule, Lesson Plans, Homework & Student Phone Management
  */
 
-import { store, formatPhoneForDisplay } from '../store.js';
+import { store, formatPhoneForDisplay, formatGrade } from '../store.js';
 import { auth } from '../auth.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -14,6 +14,7 @@ import { ScheduleView } from './scheduleView.js';
 import { logger } from '../utils/logger.js';
 import { AdminDashboard } from './adminDashboard.js';
 import { openClassroomModal } from '../components/classroomModal.js';
+import { renderLessonModeHtml, bindLessonMode } from '../components/lessonMode.js';
 
 export const TeacherCabinet = {
   selectedGroupId: null,
@@ -418,170 +419,9 @@ export const TeacherCabinet = {
           </div>
         </div>
 
-        <!-- Section 1: Category Scoring Toolbar for selected students / group -->
-        <div style="margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px dashed var(--color-border);">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-            <div style="font-size:var(--font-size-xs); font-weight:700; color:var(--color-text-main); display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <span>⭐ Баллы выбранным (<span id="selected-students-count">${this.selectedStudentIds.size}</span> из ${activeGroupStudents.length} уч.):</span>
-              <div style="display:inline-flex; gap:4px;">
-                <button type="button" class="btn btn-xs btn-ghost" id="btn-select-all-students" style="padding:1px 6px; font-size:0.7rem; border:1px solid var(--color-border);">Выбрать всех</button>
-                <button type="button" class="btn btn-xs btn-ghost" id="btn-deselect-all-students" style="padding:1px 6px; font-size:0.7rem; border:1px solid var(--color-border);">Снять выбор</button>
-              </div>
-            </div>
-            <div style="display:flex; gap:6px;">
-              <button type="button" class="group-scoring-tab-btn ${this.groupScoringMode !== 'deduct' ? 'active tab-add' : ''}" data-mode="add">
-                🟢 Начисление (+)
-              </button>
-              <button type="button" class="group-scoring-tab-btn ${this.groupScoringMode === 'deduct' ? 'active tab-deduct' : ''}" data-mode="deduct">
-                🔴 Списание (-)
-              </button>
-            </div>
-          </div>
-
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            ${(this.groupScoringMode === 'deduct' ? SCORING_TEMPLATES.deduct : SCORING_TEMPLATES.add).map(tpl => `
-              <button type="button" class="scoring-category-pill ${this.groupScoringMode === 'deduct' ? 'pill-deduct' : ''} btn-batch-cat-pill" data-points="${tpl.points}" data-type="${this.groupScoringMode === 'deduct' ? 'deduct' : 'add'}" data-category="${tpl.category}" data-label="${tpl.label}" title="${this.groupScoringMode === 'deduct' ? 'Списать' : 'Начислить'} ${tpl.points} ⭐ выбранным ученикам">
-                <span>${tpl.icon}</span>
-                <span>${tpl.label}</span>
-                <span class="pill-pts-badge ${this.groupScoringMode === 'deduct' ? 'deduct' : 'add'}">
-                  ${this.groupScoringMode === 'deduct' ? '-' : '+'}${tpl.points} ⭐
-                </span>
-              </button>
-            `).join('')}
-            <button type="button" class="btn btn-sm btn-ghost btn-batch-group-pts-custom" style="border:1px dashed var(--color-border); border-radius:9999px; padding:6px 14px; font-size:var(--font-size-xs); font-weight:700;">
-              ✏️ Свои баллы...
-            </button>
-          </div>
-        </div>
-
-        <!-- Section 2: Students List of this active group with Category Pills and 1-Click Payments -->
-        <div style="margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px dashed var(--color-border);">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <div style="font-size:var(--font-size-xs); font-weight:700; color:var(--color-text-main);">
-                👨‍🎓 Ученики на уроке (${activeGroupStudents.length})
-              </div>
-              ${activeGroup ? `
-                <button type="button" class="btn btn-xs btn-outline-primary btn-cabinet-open-classroom" data-gid="${activeGroup.id}" title="Посмотреть турнирную таблицу и статус мини-игр этого класса">
-                  🏆 Рейтинг и игры класса ➔
-                </button>
-              ` : ''}
-            </div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <span class="text-xs text-muted">
-                Оплата за <strong>${currMonth.name}</strong>:
-                <strong style="color:${unpaidCount === 0 ? '#16a34a' : '#ea580c'};">${paidCount} из ${activeGroupStudents.length} оплатили</strong>
-              </span>
-              ${unpaidCount > 0 ? `
-                <button class="btn btn-xs btn-outline-success btn-cabinet-pay-all-group" title="Отметить оплату всем ${unpaidCount} неоплатившим ученикам">
-                  💳 Отметить оплату всей группе
-                </button>
-              ` : `
-                <span class="badge badge-success" style="font-size:0.7rem;">✓ Все оплатили</span>
-              `}
-            </div>
-          </div>
-
-          ${activeGroupStudents.length === 0 ? `
-            <div style="padding:var(--space-5); text-align:center; background:var(--color-bg-app); border-radius:var(--radius-lg);">
-              <div style="font-size:1.5rem; margin-bottom:4px;">👥</div>
-              <div style="font-weight:600; font-size:var(--font-size-sm);">В этой группе пока нет добавленных учеников</div>
-              <div class="text-xs text-muted" style="margin-top:2px; margin-bottom:12px;">Загрузите список детей через трафарет Word или распределите их из базы</div>
-              <button class="btn btn-primary btn-sm btn-cabinet-import-docx-trigger">
-                📥 Загрузить учеников из Word (.docx)
-              </button>
-            </div>
-          ` : `
-            <div style="display:flex; flex-direction:column; gap:8px;">
-              ${activeGroupStudents.map(st => {
-                const payment = store.getPayment(st.id, currMonth.key);
-                const isPaid = payment && payment.status === 'paid';
-                return `
-                  <div class="active-group-student-row">
-                    <!-- Checkbox & Student Info -->
-                    <div style="display:flex; align-items:center; gap:10px; min-width:200px;">
-                      <label style="display:flex; align-items:center; margin:0; cursor:pointer;" title="Выбрать для начисления/списания баллов">
-                        <input type="checkbox" class="student-select-cb" data-sid="${st.id}" ${this.selectedStudentIds.has(st.id) ? 'checked' : ''} style="width:18px; height:18px; cursor:pointer; accent-color:var(--color-primary);">
-                      </label>
-                      <div style="width:36px; height:36px; border-radius:var(--radius-full); background:#4f46e5; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.85rem; flex-shrink:0;">
-                        ${st.avatarUrl && st.avatarUrl.length <= 4 ? st.avatarUrl : st.fullName.split(' ').map(n=>n[0]).slice(0,2).join('')}
-                      </div>
-                      <div>
-                        <div style="font-weight:700; font-size:var(--font-size-sm); color:var(--color-text-main);">
-                          ${st.fullName}
-                        </div>
-                        <div class="text-xs text-muted">
-                          ${st.grade || ''} • ${st.phone ? `<a href="tel:${st.phone}" style="color:inherit; text-decoration:none;">📞 ${st.phone}</a>` : 'тел. не указан'}
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Category Points Section (Direct 1-Click Pills + Category Modals) -->
-                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                      <span class="student-live-points" data-sid="${st.id}" style="font-size:0.85rem; font-weight:800; background:#fef3c7; color:#b45309; border:1px solid #fde68a; padding:4px 10px; border-radius:9999px; min-width:65px; text-align:center;">
-                        ⭐ ${st.totalPoints || 0}
-                      </span>
-
-                      <button type="button" class="scoring-category-pill sm btn-student-cat-pill" data-sid="${st.id}" data-pts="10" data-type="add" data-cat="Активность" data-label="Хороший ответ" title="Начислить +10 за хороший ответ">
-                        <span>👍</span>
-                        <span>Хороший ответ</span>
-                        <span class="pill-pts-badge add">+10 ⭐</span>
-                      </button>
-
-                      <button type="button" class="scoring-category-pill sm btn-student-cat-pill" data-sid="${st.id}" data-pts="15" data-type="add" data-cat="Активность" data-label="Хорошая работа на уроке" title="Начислить +15 за работу на уроке">
-                        <span>⭐</span>
-                        <span>Хорошая работа</span>
-                        <span class="pill-pts-badge add">+15 ⭐</span>
-                      </button>
-
-                      <button type="button" class="scoring-category-pill sm btn-student-cat-pill" data-sid="${st.id}" data-pts="20" data-type="add" data-cat="Домашнее задание" data-label="Домашнее задание" title="Начислить +20 за ДЗ">
-                        <span>📝</span>
-                        <span>ДЗ</span>
-                        <span class="pill-pts-badge add">+20 ⭐</span>
-                      </button>
-
-                      <button type="button" class="scoring-category-pill sm btn-student-cat-pill" data-sid="${st.id}" data-pts="15" data-type="add" data-cat="Чтение / Reading" data-label="Чтение" title="Начислить +15 за чтение">
-                        <span>📖</span>
-                        <span>Чтение</span>
-                        <span class="pill-pts-badge add">+15 ⭐</span>
-                      </button>
-
-                      <!-- Open All Plus Categories Modal -->
-                      <button type="button" class="scoring-category-pill sm btn-open-student-scoring-modal" data-sid="${st.id}" data-tab="add" title="Все категории начисления баллов" style="background:#f0fdf4; border-color:#86efac; color:#15803d; font-weight:700;">
-                        <span>➕ Категории...</span>
-                      </button>
-
-                      <!-- Open Deduction Minus Categories Modal -->
-                      <button type="button" class="scoring-category-pill sm pill-deduct btn-open-student-scoring-modal" data-sid="${st.id}" data-tab="deduct" title="Списать баллы (не сделал ДЗ, телефон, нарушение)" style="font-weight:700;">
-                        <span>➖ Списать...</span>
-                      </button>
-
-                      <button type="button" class="btn btn-xs btn-ghost btn-quick-custom-pts" data-sid="${st.id}" title="Свои произвольные баллы" style="padding:4px 8px; border:1px dashed var(--color-border); border-radius:9999px;">
-                        ✏️
-                      </button>
-                    </div>
-
-                    <!-- Payment Status & 1-Click Action -->
-                    <div style="display:flex; align-items:center; gap:6px; margin-left:auto;">
-                      ${isPaid ? `
-                        <span class="badge" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:700; font-size:0.75rem; padding:5px 10px; border-radius:var(--radius-full);" title="Оплачено ${payment.paidAt ? new Date(payment.paidAt).toLocaleDateString('ru-RU') : ''}">
-                          ✓ Оплачено
-                        </span>
-                        <button class="btn btn-xs btn-ghost text-muted btn-toggle-cabinet-payment" data-sid="${st.id}" data-action="unpaid" title="Отменить отметку оплаты при ошибке" style="font-size:0.7rem; padding:2px 6px;">
-                          ✕ отмена
-                        </button>
-                      ` : `
-                        <button class="btn btn-xs btn-toggle-cabinet-payment" data-sid="${st.id}" data-action="paid" style="background:#fee2e2; border:1.5px solid #ef4444; color:#b91c1c; font-weight:700; font-size:0.75rem; padding:5px 12px; border-radius:var(--radius-full); cursor:pointer; display:inline-flex; align-items:center; gap:5px;" title="Нажмите, чтобы отметить оплату за ${currMonth.name}">
-                          <span>⏳ Не оплачено</span>
-                          <span style="background:#b91c1c; color:#fff; padding:1px 6px; border-radius:10px; font-size:0.65rem;">+ 💳 Принять</span>
-                        </button>
-                      `}
-                    </div>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          `}
+        <!-- Lesson mode: attendance, points and payments for the whole group on one screen -->
+        <div id="lesson-mode-mount" style="margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px dashed var(--color-border);">
+          ${renderLessonModeHtml({ group: activeGroup, lesson: activeLesson, students: activeGroupStudents, currMonth })}
         </div>
       </div>
 
@@ -677,7 +517,7 @@ export const TeacherCabinet = {
                   <div style="display: flex; align-items: flex-start; justify-content: space-between;">
                     <div>
                       <div style="font-weight: 700; font-size: var(--font-size-sm);">${st.fullName}</div>
-                      <div class="text-xs text-muted">${st.grade} • ${st.shift} смена • ${st.school}</div>
+                      <div class="text-xs text-muted">${formatGrade(st.grade)} • ${st.shift} смена • ${st.school}</div>
                       ${grp ? `<button type="button" class="badge badge-planned btn-cabinet-open-classroom" data-gid="${grp.id}" style="font-size:0.65rem; margin-top:2px; cursor:pointer; border:none; text-decoration:none;" title="Открыть кабинет класса: турнирная таблица и игры">👥 ${grp.name} ➔</button>` : ''}
                     </div>
                     <span class="student-points-badge">⭐ ${st.totalPoints || 0}</span>
@@ -788,6 +628,18 @@ export const TeacherCabinet = {
 
   bindEvents(container, teacher, context = {}) {
     const { activeGroup, activeGroupStudents = [], activeLesson, currMonth = store.getCurrentAcademicMonth() } = context;
+
+    // Lesson mode (re-renders only its own block so the page does not jump)
+    const lmMount = container.querySelector('#lesson-mode-mount');
+    if (lmMount && activeGroup) {
+      const lmCtx = { group: activeGroup, lesson: activeLesson, students: activeGroupStudents, teacher, currMonth };
+      const lmRender = () => {
+        lmCtx.students = store.getStudentsByGroupId(activeGroup.id);
+        lmMount.innerHTML = renderLessonModeHtml(lmCtx);
+        bindLessonMode(lmMount, lmCtx, { rerender: lmRender, openStudentModal: (sid) => this.openStudentScoringModal(sid, 'add', container) });
+      };
+      bindLessonMode(lmMount, lmCtx, { rerender: lmRender, openStudentModal: (sid) => this.openStudentScoringModal(sid, 'add', container) });
+    }
 
     // Active Group Selector
     container.querySelector('#select-cabinet-active-group')?.addEventListener('change', (e) => {
@@ -952,9 +804,9 @@ export const TeacherCabinet = {
           comment: `${label} (группа ${activeGroup ? activeGroup.name : ''})`
         }));
 
-        store.awardPointsBatch(items);
+        const res = store.awardPointsBatch(items);
         const sign = type === 'deduct' ? '-' : '+';
-        toast.success(`${sign}${pts} ⭐ («${label}») для ${targetStudents.length} выбранных учеников!`);
+        toast.success(`${sign}${pts} ⭐ («${label}») для ${res.length} учеников!${res.skippedAbsent && res.skippedAbsent.length ? ` Пропущены отсутствующие: ${res.skippedAbsent.join(', ')}.` : ''}`);
         this.render(container);
       });
     });
@@ -1024,9 +876,9 @@ export const TeacherCabinet = {
               comment: comm,
               excludeFromRating
             }));
-            store.awardPointsBatch(items, { excludeFromRating });
+            const res = store.awardPointsBatch(items, { excludeFromRating });
             modal.close();
-            toast.success(`Начислено по +${pts} ⭐ для ${targetStudents.length} учеников!${excludeFromRating ? ' (без рейтинга)' : ''}`);
+            toast.success(`Начислено по +${pts} ⭐ для ${res.length} учеников!${excludeFromRating ? ' (без рейтинга)' : ''}${res.skippedAbsent && res.skippedAbsent.length ? ` Пропущены отсутствующие: ${res.skippedAbsent.join(', ')}.` : ''}`);
             this.render(container);
           });
         }
@@ -1384,7 +1236,7 @@ export const TeacherCabinet = {
             </div>
             <div>
               <div style="font-weight:700; font-size:var(--font-size-base); color:var(--color-text-main);">${liveStudent.fullName}</div>
-              <div class="text-xs text-muted">${liveStudent.grade || ''} • ${liveStudent.school || ''}</div>
+              <div class="text-xs text-muted">${formatGrade(liveStudent.grade) || ''} • ${liveStudent.school || ''}</div>
             </div>
           </div>
           <div style="text-align:right;">

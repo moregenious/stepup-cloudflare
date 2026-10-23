@@ -12,7 +12,7 @@
 import { apiRequest, setStatus, getServerConfig, getCloudStatus } from './api.js';
 
 export const LIST_COLLS = ['students', 'teachers', 'groups', 'schedule', 'pointRecords', 'purchases', 'shopItems', 'activityLogs'];
-export const MAP_COLLS = ['payments', 'textbookLessons', 'textbookVocabularyPool'];
+export const MAP_COLLS = ['payments', 'attendance', 'textbookLessons', 'textbookVocabularyPool'];
 const LIST_SET = new Set(LIST_COLLS);
 const MAP_SET = new Set(MAP_COLLS);
 const TRANSIENT_KEYS = new Set(['lastUpdated', 'exportedAt']);

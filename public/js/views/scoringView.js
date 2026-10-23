@@ -2,7 +2,7 @@
  * Scoring & Points Management View - Awarding and Deducting points, tracking tests, and comments
  */
 
-import { store } from '../store.js';
+import { store, formatGrade } from '../store.js';
 import { auth } from '../auth.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -93,7 +93,7 @@ export const ScoringView = {
           <label class="form-label" style="margin:0; font-size:var(--font-size-xs);">Ученик:</label>
           <select id="filter-score-student" class="form-control">
             <option value="all" ${this.filterStudent === 'all' ? 'selected' : ''}>Все ученики</option>
-            ${students.map(s => `<option value="${s.id}" ${this.filterStudent === s.id ? 'selected' : ''}>${s.fullName} (${s.grade}, ${s.totalPoints} ⭐)</option>`).join('')}
+            ${students.map(s => `<option value="${s.id}" ${this.filterStudent === s.id ? 'selected' : ''}>${s.fullName} (${formatGrade(s.grade)}, ${s.totalPoints} ⭐)</option>`).join('')}
           </select>
         </div>
 
@@ -160,7 +160,7 @@ export const ScoringView = {
                     </td>
                     <td>
                       <div class="font-semibold">${student ? student.fullName : '—'}</div>
-                      <div class="text-xs text-muted">${student ? student.grade + ' • Баланс: ' + student.totalPoints + ' ⭐' : ''}</div>
+                      <div class="text-xs text-muted">${student ? formatGrade(student.grade) + ' • Баланс: ' + student.totalPoints + ' ⭐' : ''}</div>
                     </td>
                     <td>
                       <span class="badge ${isPositive ? 'badge-planned' : 'badge-cancelled'}">${r.category}</span>
@@ -293,7 +293,7 @@ export const ScoringView = {
               <input type="checkbox" name="studentIds" value="${s.id}" ${isChecked ? 'checked' : ''}>
               <div>
                 <span class="font-semibold" style="font-size:var(--font-size-xs); color:var(--color-text-main);">${s.fullName}</span>
-                <span class="text-muted text-xs" style="font-size:0.7rem; margin-left:4px;">(${s.grade || 'Ученик'}${grp ? ` • 👥 ${grp.name}` : ' • Индивидуально'})</span>
+                <span class="text-muted text-xs" style="font-size:0.7rem; margin-left:4px;">(${formatGrade(s.grade) || 'Ученик'}${grp ? ` • 👥 ${grp.name}` : ' • Индивидуально'})</span>
               </div>
             </div>
             <span class="student-points-badge" style="font-size:0.7rem; padding:1px 6px;">⭐ ${s.totalPoints || 0}</span>
@@ -625,7 +625,8 @@ export const ScoringView = {
           }));
 
           const studentNames = selectedStudentIds.map(stId => store.getStudentById(stId)?.fullName).filter(Boolean);
-          store.awardPointsBatch(awardsList, { excludeFromRating });
+          const res = store.awardPointsBatch(awardsList, { excludeFromRating });
+          if (res.skippedAbsent && res.skippedAbsent.length) toast.info(`Отсутствующим на уроке баллы не начислены: ${res.skippedAbsent.join(', ')}`);
 
           modal.close();
 

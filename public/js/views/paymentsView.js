@@ -2,7 +2,7 @@
  * Payments Management View - Monthly Tuition Fees, 1-Click Status Toggles, Multi-Select Bulk Actions & Statistics
  */
 
-import { store } from '../store.js';
+import { store, formatGrade } from '../store.js';
 import { auth } from '../auth.js';
 import { toast } from '../components/toast.js';
 import { renderStudentAvatarHtml } from '../components/avatarCustomization.js';
@@ -65,7 +65,7 @@ export const PaymentsView = {
                   ${s.fullName}
                 </div>
                 ${s.studentTitle ? `<div style="margin-top:2px;"><span class="student-title-badge light" style="font-size:0.65rem; padding: 1px 8px;">${s.studentTitle}</span></div>` : ''}
-                <div class="text-xs text-muted">${s.grade} • ${s.school}</div>
+                <div class="text-xs text-muted">${formatGrade(s.grade)} • ${s.school}</div>
               </div>
             </div>
           </td>

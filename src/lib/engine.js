@@ -186,7 +186,7 @@ function seedState() {
   return {
     admin: { name: 'Администратор', login: config.bootstrapAdminLogin || 'admin', email: '' },
     teachers: [], groups: [], students: [], schedule: [], pointRecords: [], purchases: [],
-    activityLogs: [], payments: {}, textbookLessons: {}, textbookVocabularyPool: {},
+    activityLogs: [], payments: {}, attendance: {}, textbookLessons: {}, textbookVocabularyPool: {},
     deletedStudents: [], deletedGroups: [], deletedTextbooks: [], vacationMode: false
   };
 }

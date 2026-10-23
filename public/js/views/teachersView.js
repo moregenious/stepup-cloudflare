@@ -3,7 +3,7 @@
  * Registration of teachers is strictly managed by the Administrator.
  */
 
-import { store, formatPhoneForDisplay } from '../store.js';
+import { store, formatPhoneForDisplay, formatGrade } from '../store.js';
 import { auth } from '../auth.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -87,8 +87,8 @@ export const TeachersView = {
                   </div>
                   <div style="display: flex; flex-wrap: wrap; gap: var(--space-2);">
                     ${assignedStudents.length === 0 ? '<span class="text-xs text-muted">Пока нет прикрепленных занятий</span>' : assignedStudents.map(st => `
-                      <span class="badge badge-level level-${st.level.toLowerCase()}" style="font-size: 0.7rem;" title="${st.level} • ${st.grade}">
-                        ${st.fullName} (${st.grade})
+                      <span class="badge badge-level level-${st.level.toLowerCase()}" style="font-size: 0.7rem;" title="${st.level} • ${formatGrade(st.grade)}">
+                        ${st.fullName} (${formatGrade(st.grade)})
                       </span>
                     `).join('')}
                   </div>

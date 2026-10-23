@@ -2,7 +2,7 @@
  * Groups Management View - Study Groups, Rosters, Group Scheduling, and Group Details
  */
 
-import { store, formatPhoneForDisplay } from '../store.js';
+import { store, formatPhoneForDisplay, formatGrade } from '../store.js';
 import { auth } from '../auth.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -176,8 +176,8 @@ export const GroupsView = {
               ${students.length === 0 ? `
                 <span class="text-xs text-muted">В группе пока нет учеников</span>
               ` : students.map(st => `
-                <div class="badge" style="background: var(--color-bg-app); border: 1px solid var(--color-border); font-size: 0.75rem; color: var(--color-text-main); font-weight: 500;" title="${st.grade} • ${st.school}">
-                  👤 ${st.fullName} (${st.grade})
+                <div class="badge" style="background: var(--color-bg-app); border: 1px solid var(--color-border); font-size: 0.75rem; color: var(--color-text-main); font-weight: 500;" title="${formatGrade(st.grade)} • ${st.school}">
+                  👤 ${st.fullName} (${formatGrade(st.grade)})
                 </div>
               `).join('')}
             </div>
@@ -420,7 +420,7 @@ export const GroupsView = {
                   <label class="group-modal-student-item" data-search-text="${searchText}" style="display: flex; align-items: center; gap: var(--space-2); padding: 6px 8px; font-size: var(--font-size-xs); cursor: pointer; border-radius: var(--radius-sm); transition: background 0.15s ease; user-select: none;">
                     <input type="checkbox" name="selectedStudents" value="${s.id}" class="cb-group-student-select" style="cursor:pointer; width:15px; height:15px;">
                     <span style="font-weight:600; color:var(--color-text-main);">${s.fullName}</span>
-                    <span class="text-muted" style="font-size:0.72rem;">(${s.grade || '—'}${s.school ? ` • ${s.school}` : ''})</span>
+                    <span class="text-muted" style="font-size:0.72rem;">(${formatGrade(s.grade) || '—'}${s.school ? ` • ${s.school}` : ''})</span>
                     ${currentGroup ? `<span class="badge" style="margin-left:auto; font-size:0.68rem; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">[в: ${currentGroup.name}]</span>` : '<span style="margin-left:auto; font-size:0.68rem; color:#16a34a; font-weight:600;">(без группы)</span>'}
                   </label>
                 `;
@@ -665,7 +665,7 @@ export const GroupsView = {
                   <label class="group-modal-student-item" data-search-text="${searchText}" style="display: flex; align-items: center; gap: var(--space-2); padding: 6px 8px; font-size: var(--font-size-xs); cursor: pointer; border-radius: var(--radius-sm); transition: background 0.15s ease; user-select: none; ${isMember ? 'background:#eef2ff;' : ''}">
                     <input type="checkbox" name="selectedStudents" value="${s.id}" ${isMember ? 'checked' : ''} class="cb-edit-group-student-select" style="cursor:pointer; width:15px; height:15px;">
                     <span style="font-weight:600; color:var(--color-text-main);">${s.fullName}</span>
-                    <span class="text-muted" style="font-size:0.72rem;">(${s.grade || '—'}${s.school ? ` • ${s.school}` : ''})</span>
+                    <span class="text-muted" style="font-size:0.72rem;">(${formatGrade(s.grade) || '—'}${s.school ? ` • ${s.school}` : ''})</span>
                     ${s.groupId && !isMember ? `<span class="badge" style="margin-left:auto; font-size:0.68rem; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">[в другой группе]</span>` : isMember ? '<span class="badge badge-success" style="margin-left:auto; font-size:0.68rem;">✓ в этой группе</span>' : '<span style="margin-left:auto; font-size:0.68rem; color:#16a34a; font-weight:600;">(без группы)</span>'}
                   </label>
                 `;
@@ -830,7 +830,7 @@ export const GroupsView = {
               ${students.length === 0 ? '<div class="text-xs text-muted">В группе пока нет учеников</div>' : students.map(st => `
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-3); background: var(--color-bg-app); border-radius: var(--radius-md); font-size: var(--font-size-xs);">
                   <div>
-                    <span class="font-semibold">${st.fullName}</span> (${st.grade}, ${st.school})
+                    <span class="font-semibold">${st.fullName}</span> (${formatGrade(st.grade)}, ${st.school})
                     <div class="text-muted">${st.parentName || ''} • ${st.phone || ''}</div>
                   </div>
                   <span class="student-points-badge">⭐ ${st.totalPoints || 0}</span>

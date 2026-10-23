@@ -39,6 +39,7 @@ function createEmptyState() {
     shopItems: [],
     activityLogs: [],
     payments: {},
+    attendance: {},
     textbookLessons: {},
     textbookVocabularyPool: {},
     textbooks: [],
@@ -47,6 +48,41 @@ function createEmptyState() {
     deletedTextbooks: [],
     vacationMode: false
   };
+}
+
+// ---------- School grade / college course ----------
+export const GRADE_OPTIONS = [
+  ...Array.from({ length: 11 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} класс` })),
+  ...[1, 2, 3, 4].map(n => ({ value: `${n} курс`, label: `${n} курс (колледж / университет)` }))
+];
+
+/** '5 «А»', '-4 <<В>>', '9А' -> '5', '4', '9'; '2 курс' -> '2 курс'; '-' / '' -> '' */
+export function normalizeGrade(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s || /^[-–—.\s]+$/.test(s)) return '';
+  const m = s.match(/\d+/);
+  if (!m) return s;
+  const n = Number(m[0]);
+  if (/курс/i.test(s)) return n >= 1 && n <= 6 ? `${n} курс` : s;
+  return n >= 1 && n <= 11 ? String(n) : s;
+}
+
+/** <select> with classes 1–11 and college courses 1–4 */
+export function gradeSelectHtml(current, { required = false, name = 'grade' } = {}) {
+  const cur = normalizeGrade(current);
+  const opt = (o, text) => `<option value="${o.value}" ${cur === o.value ? 'selected' : ''}>${text}</option>`;
+  return `
+    <select name="${name}" class="form-control" ${required ? 'required' : ''}>
+      <option value="" ${cur ? '' : 'selected'} ${required ? 'disabled' : ''}>${required ? 'Выберите класс или курс' : '— не указан —'}</option>
+      <optgroup label="Школа">${GRADE_OPTIONS.filter(o => !o.value.includes('курс')).map(o => opt(o, o.label)).join('')}</optgroup>
+      <optgroup label="Колледж / университет">${GRADE_OPTIONS.filter(o => o.value.includes('курс')).map(o => opt(o, o.value)).join('')}</optgroup>
+    </select>`;
+}
+
+/** For display: '5' -> '5 класс' */
+export function formatGrade(grade) {
+  const g = normalizeGrade(grade);
+  return /^\d+$/.test(g) ? `${g} класс` : g;
 }
 
 export function normalizePhone(rawPhone) {
@@ -243,7 +279,21 @@ class Store {
     if (!this.isStaffSession() || this._automationRunning) return;
     this._automationRunning = true;
     try { this.autoCompletePastLessons(); } catch (e) { /* ignore */ }
+    try { this.normalizeAllGrades(); } catch (e) { /* ignore */ }
     this._automationRunning = false;
+  }
+
+  /** One-time cleanup of the free-text class field: keep only the number (letters removed) */
+  normalizeAllGrades() {
+    if (this._gradesNormalized || !this._serverSynced) return;
+    this._gradesNormalized = true;
+    let changed = false;
+    (this.state.students || []).forEach(s => {
+      if (s.grade === undefined) return;
+      const g = normalizeGrade(s.grade);
+      if (g !== s.grade) { s.grade = g; changed = true; }
+    });
+    if (changed) this.saveState();
   }
 
   /** Kept for compatibility: refresh data from the server */
@@ -1739,7 +1789,7 @@ class Store {
       phone: formattedPhone,
       parentName: studentData.parentName?.trim() || '',
       parentPhone: formattedParentPhone,
-      grade: studentData.grade?.trim() || '',
+      grade: normalizeGrade(studentData.grade),
       school: studentData.school?.trim() || '',
       shift: studentData.shift || 'Первая',
       level: level,
@@ -1788,7 +1838,7 @@ class Store {
         phone: formattedPhone,
         parentName: item.parentName?.trim() || '',
         parentPhone: formattedParentPhone,
-        grade: item.grade?.trim() || '',
+        grade: normalizeGrade(item.grade),
         school: item.school?.trim() || '',
         shift: item.shift || 'Первая',
         level: level,
@@ -1838,6 +1888,7 @@ class Store {
         ...oldStudent,
         ...studentData
       };
+      if (studentData.grade !== undefined) updated.grade = normalizeGrade(studentData.grade);
       if (studentData.phone) updated.phone = formatPhoneForDisplay(studentData.phone);
       if (studentData.parentPhone) updated.parentPhone = formatPhoneForDisplay(studentData.parentPhone);
 
@@ -3226,8 +3277,32 @@ class Store {
     return record;
   }
 
+  /**
+   * Group award. Students marked absent at today's lesson are skipped (unless options.includeAbsent).
+   * Accepts a list of items or { studentIds, points, type, category, comment, teacherId }.
+   * The returned array has .skippedAbsent (names of skipped students).
+   */
   awardPointsBatch(items = [], options = {}) {
-    if (!Array.isArray(items) || items.length === 0) return [];
+    if (items && !Array.isArray(items) && Array.isArray(items.studentIds)) {
+      const { studentIds, ...rest } = items;
+      items = studentIds.map(studentId => ({ ...rest, studentId }));
+    }
+    if (!Array.isArray(items) || items.length === 0) return Object.assign([], { skippedAbsent: [] });
+    const skippedAbsent = [];
+    // A single chosen student is awarded on purpose even if marked absent
+    if (!options.includeAbsent && items.length > 1) {
+      const absentByGroup = new Map();
+      items = items.filter(item => {
+        const st = this.getStudentById(item.studentId);
+        const gid = st ? st.groupId : null;
+        if (!absentByGroup.has(gid)) absentByGroup.set(gid, this.getAbsentStudentIdsToday(gid));
+        if (absentByGroup.get(gid).has(item.studentId)) {
+          skippedAbsent.push(st ? st.fullName : item.studentId);
+          return false;
+        }
+        return true;
+      });
+    }
     const nowIso = new Date().toISOString();
     const createdRecords = [];
     const batchExcludeFromRating = Boolean(options.excludeFromRating);
@@ -3280,6 +3355,7 @@ class Store {
       this.saveState();
     }
 
+    createdRecords.skippedAbsent = skippedAbsent;
     return createdRecords;
   }
 
@@ -3328,6 +3404,17 @@ class Store {
    * Monthly Group Leaderboard - calculates points strictly for the target academic month
    * Excludes bonus points (excludeFromRating: true) and limits to students of this group
    */
+  /**
+   * Does a point record count for the monthly rating? Spending points (shop, prize exchange) must not
+   * lower a student's place; penalties from the teacher still do.
+   */
+  countsForRating(r) {
+    if (!r || r.excludeFromRating || r.noRating) return false;
+    const pts = Number(r.points) || 0;
+    if (pts < 0 && /приз|покупк|магазин|обмен/i.test(String(r.category || ''))) return false;
+    return true;
+  }
+
   getGroupMonthlyLeaderboard(groupId, year, monthIndex) {
     if (!groupId) {
       return [];
@@ -3356,7 +3443,7 @@ class Store {
     const leaderboard = students.map(student => {
       const monthlyRecords = allRecords.filter(r => {
         if (r.studentId !== student.id) return false;
-        if (r.excludeFromRating || r.noRating) return false;
+        if (!this.countsForRating(r)) return false;
         if (!r.date) return false;
         const d = new Date(r.date);
         if (isNaN(d.getTime())) return false;
@@ -3434,7 +3521,7 @@ class Store {
     const leaderboard = students.map(student => {
       const monthlyRecords = allRecords.filter(r => {
         if (r.studentId !== student.id) return false;
-        if (r.excludeFromRating || r.noRating) return false;
+        if (!this.countsForRating(r)) return false;
         if (!r.date) return false;
         const d = new Date(r.date);
         if (isNaN(d.getTime())) return false;
@@ -3532,7 +3619,7 @@ class Store {
     if (surveyData.parent1Role) student.parent1Role = surveyData.parent1Role.trim();
     if (surveyData.parent2Role) student.parent2Role = surveyData.parent2Role.trim();
     if (surveyData.school) student.school = surveyData.school.trim();
-    if (surveyData.grade) student.grade = surveyData.grade.trim();
+    if (surveyData.grade) student.grade = normalizeGrade(surveyData.grade);
     if (surveyData.shift) student.shift = surveyData.shift.trim();
 
     student.surveyCompleted = true;
@@ -3618,67 +3705,108 @@ class Store {
   // Lesson Attendance Management
   // =========================================================================
 
-  getLessonAttendance(lessonId) {
-    const lesson = this.getLessonById(lessonId);
-    return (lesson && lesson.attendance) ? lesson.attendance : {};
+  // Attendance is stored per lesson DATE (state.attendance), not on the weekly schedule entry,
+  // so every lesson keeps its own record. Key: <groupId | ind-studentId>_<YYYY-MM-DD>
+  todayDateStr(d = new Date()) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
-  saveLessonAttendance(lessonId, attendanceMap) {
+  /** 'YYYY-MM-DD' from 'YYYY-MM-DD' | 'DD.MM' | Date; null if unknown */
+  toIsoDate(value) {
+    if (!value) return null;
+    if (value instanceof Date) return this.todayDateStr(value);
+    const s = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const m = s.match(/^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$/);
+    if (m) return `${m[3] || new Date().getFullYear()}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    return null;
+  }
+
+  lessonDateFor(lesson, date) {
+    return this.toIsoDate(date) || (!lesson.isRecurring && this.toIsoDate(lesson.date)) || this.todayDateStr();
+  }
+
+  attendanceKey(lesson, date) {
+    const owner = lesson.groupId || (lesson.studentId ? 'ind-' + lesson.studentId : 'lesson-' + (lesson.baseId || lesson.id));
+    return `${owner}_${this.lessonDateFor(lesson, date)}`;
+  }
+
+  getAttendanceRecord(lesson, date) {
+    if (!lesson) return null;
+    return (this.state.attendance || {})[this.attendanceKey(lesson, date)] || null;
+  }
+
+  getLessonAttendance(lessonId, date = null) {
+    const lesson = this.getLessonById(lessonId);
+    if (!lesson) return {};
+    const rec = this.getAttendanceRecord(lesson, date);
+    if (rec) return { ...rec.marks };
+    // Older one-off lessons kept marks on the lesson itself
+    return (!lesson.isRecurring && lesson.attendance) ? { ...lesson.attendance } : {};
+  }
+
+  saveLessonAttendance(lessonId, attendanceMap, date = null) {
     const lesson = this.getLessonById(lessonId);
     if (!lesson) return null;
-    lesson.attendance = { ...(lesson.attendance || {}), ...attendanceMap };
-
-    // If lesson was planned, marking attendance marks it as completed
-    if (lesson.status === 'planned') {
-      lesson.status = 'completed';
-      if (lesson.groupId) {
-        try {
-          this._handleLessonCompletion(lesson, lesson.date || new Date().toISOString().slice(0, 10));
-        } catch (e) {
-          console.warn('⚠️ _handleLessonCompletion on attendance error:', e);
-        }
-      }
-    }
+    const day = this.lessonDateFor(lesson, date);
+    if (!this.state.attendance) this.state.attendance = {};
+    const key = this.attendanceKey(lesson, day);
+    const prev = this.state.attendance[key];
+    this.state.attendance[key] = {
+      date: day,
+      groupId: lesson.groupId || null,
+      studentId: lesson.groupId ? null : (lesson.studentId || null),
+      lessonId: lesson.baseId || lesson.id,
+      teacherId: (typeof localStorage !== 'undefined' && localStorage.getItem('crm_current_teacher_id')) || lesson.teacherId || null,
+      marks: { ...(prev ? prev.marks : {}), ...attendanceMap },
+      updatedAt: new Date().toISOString()
+    };
     this.saveState(true);
-    return lesson.attendance;
+    return this.state.attendance[key].marks;
+  }
+
+  /** Mark one student; status 'present' | 'absent' */
+  setAttendanceMark(lessonId, studentId, status, date = null) {
+    return this.saveLessonAttendance(lessonId, { [studentId]: status }, date);
+  }
+
+  /** Students of the group marked absent today (used to skip them in group point awards) */
+  getAbsentStudentIdsToday(groupId) {
+    const today = this.todayDateStr();
+    const out = new Set();
+    Object.values(this.state.attendance || {}).forEach(rec => {
+      if (!rec || rec.date !== today || !rec.marks) return;
+      if (groupId && rec.groupId && rec.groupId !== groupId) return;
+      Object.entries(rec.marks).forEach(([sid, st]) => { if (st === 'absent') out.add(sid); });
+    });
+    return out;
   }
 
   getStudentAttendanceStats(studentId) {
     const student = this.getStudentById(studentId);
     if (!student) return { total: 0, attended: 0, missed: 0, percentage: 100, history: [] };
-    const allLessons = this.state.schedule || [];
-    const myLessons = allLessons.filter(l => {
-      if (l.studentId === studentId) return true;
-      if (student.groupId && l.groupId === student.groupId) return true;
-      return false;
-    });
-
-    let totalConducted = 0;
-    let attended = 0;
-    let missed = 0;
     const history = [];
-
-    myLessons.forEach(l => {
-      if (l.status === 'completed' || (l.attendance && l.attendance[studentId])) {
-        totalConducted++;
-        const attStatus = l.attendance ? (l.attendance[studentId] || 'absent') : 'present';
-        if (attStatus === 'present') {
-          attended++;
-          history.push({ lessonId: l.id, date: l.date, time: l.time, topic: l.topic, status: 'present' });
-        } else {
-          missed++;
-          history.push({ lessonId: l.id, date: l.date, time: l.time, topic: l.topic, status: 'absent' });
-        }
-      }
+    Object.values(this.state.attendance || {}).forEach(rec => {
+      const st = rec && rec.marks ? rec.marks[studentId] : undefined;
+      if (!st) return;
+      const lesson = rec.lessonId ? this.getLessonById(rec.lessonId) : null;
+      history.push({ lessonId: rec.lessonId, date: rec.date, time: lesson ? lesson.time : '', topic: lesson ? lesson.topic : '', status: st === 'absent' ? 'absent' : 'present' });
     });
-
-    const percentage = totalConducted > 0 ? Math.round((attended / totalConducted) * 100) : 100;
+    // Older one-off (dated) lessons with marks stored on the lesson
+    (this.state.schedule || []).forEach(l => {
+      if (l.isRecurring || !l.attendance || !l.attendance[studentId] || !l.date) return;
+      if (history.some(h => h.date === l.date && h.lessonId === l.id)) return;
+      history.push({ lessonId: l.id, date: l.date, time: l.time, topic: l.topic, status: l.attendance[studentId] === 'absent' ? 'absent' : 'present' });
+    });
+    history.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    const attended = history.filter(h => h.status === 'present').length;
+    const missed = history.length - attended;
     return {
-      total: totalConducted,
+      total: history.length,
       attended,
       missed,
-      percentage,
-      history: history.reverse()
+      percentage: history.length ? Math.round((attended / history.length) * 100) : 100,
+      history
     };
   }
 

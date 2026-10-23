@@ -7,7 +7,7 @@
  * 4. Fast actions: 1-click points award/deduct, 1-click monthly payment, print QR/PIN memos
  */
 
-import { store } from '../store.js';
+import { store, formatGrade } from '../store.js';
 import { auth } from '../auth.js';
 import { modal } from './modal.js';
 import { toast } from './toast.js';
@@ -52,7 +52,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
         .filter(r => {
           if (!r.date) return false;
           const dt = new Date(r.date).getTime();
-          return dt >= currentMonthStart && !r.excludeFromRating;
+          return dt >= currentMonthStart && store.countsForRating(r);
         })
         .reduce((sum, r) => sum + (Number(r.points) || 0), 0);
 
@@ -238,7 +238,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
                         ${st.studentTitle ? `<span class="student-title-badge light" style="font-size:0.65rem; padding:1px 6px;">${st.studentTitle}</span>` : ''}
                       </div>
                       <div class="text-xs text-muted" style="margin-top:2px;">
-                        ${st.grade || 'Класс не указан'} • 
+                        ${formatGrade(st.grade) || 'Класс не указан'} • 
                         <span style="font-family:monospace; background:rgba(0,0,0,0.04); padding:1px 4px; border-radius:4px; font-weight:600;" title="PIN-код ученика">PIN: ${pin}</span>
                         ${st.phone ? ` • <a href="tel:${st.phone}" style="color:inherit; text-decoration:none;">📞 ${st.phone}</a>` : ''}
                       </div>
@@ -308,7 +308,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
                       ${renderStudentAvatarHtml(st, { size: 'sm' })}
                       <div>
                         <div style="font-weight:700; font-size:var(--font-size-sm); color:var(--color-text-main);">${st.fullName}</div>
-                        <div class="text-xs text-muted">${st.grade || ''} • Уровень: ${st.level || freshGroup.level}</div>
+                        <div class="text-xs text-muted">${formatGrade(st.grade) || ''} • Уровень: ${st.level || freshGroup.level}</div>
                       </div>
                     </div>
 
@@ -567,7 +567,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
             ${renderStudentAvatarHtml(liveStudent, { size: 'sm' })}
             <div>
               <div style="font-weight:700; font-size:var(--font-size-sm);">${liveStudent.fullName}</div>
-              <div class="text-xs text-muted">${liveStudent.grade || ''} • ${liveStudent.school || ''}</div>
+              <div class="text-xs text-muted">${formatGrade(liveStudent.grade) || ''} • ${liveStudent.school || ''}</div>
             </div>
           </div>
           <div>
@@ -805,7 +805,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
           const cat = e.currentTarget.getAttribute('data-cat') || 'Активность';
           const label = e.currentTarget.getAttribute('data-label') || cat;
 
-          store.awardPointsBatch({
+          const res = store.awardPointsBatch({
             studentIds: students.map(s => s.id),
             teacherId: teacher ? teacher.id : 'admin',
             points: pts,
@@ -815,7 +815,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
           });
 
           const sign = type === 'deduct' ? '-' : '+';
-          toast.success(`${sign}${pts} ⭐ («${label}») начислено всем ${students.length} ученикам группы!`);
+          toast.success(`${sign}${pts} ⭐ («${label}») начислено ${res.length} ученикам группы!${res.skippedAbsent && res.skippedAbsent.length ? ` Пропущены отсутствующие: ${res.skippedAbsent.join(', ')}.` : ''}`);
           batchDialog.close();
           batchDialog.remove();
 

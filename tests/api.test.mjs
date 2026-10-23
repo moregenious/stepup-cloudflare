@@ -162,6 +162,14 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   assert.equal((await call('/api/auth', { body: { action: 'staff', login: 'admin', password: 'NewAdmin77' } })).status, 200);
   assert.equal((await call('/api/auth', { body: { action: 'staff', login: 'admin', password: 'AdminPass1' } })).status, 401);
 
+  // Attendance per lesson date: staff writes, a student sees only own mark and cannot write
+  const att = await call('/api/push', { cookie: teacher.cookie, body: { ops: [{ c: 'attendance', id: 'grp-a_2026-10-23', t: 'put', v: { date: '2026-10-23', groupId: 'grp-a', marks: { 'stu-1': 'absent', 'stu-3': 'present' } } }] } });
+  assert.equal(att.json.results[0].ok, true, att.text);
+  const sAtt = rowsOf(await call('/api/state', { body: { known: {} }, cookie: student.cookie }), 'attendance');
+  assert.deepEqual(sAtt.map(a => a.marks), [{ 'stu-1': 'absent' }]);
+  const sAttW = await call('/api/push', { cookie: student.cookie, body: { ops: [{ c: 'attendance', id: 'grp-a_2026-10-24', t: 'put', v: { marks: { 'stu-1': 'present' } } }] } });
+  assert.equal(sAttW.json.results[0].ok, false);
+
   // Analytics events: user comes from the session, junk is filtered, admin-only CSV export with pseudonyms
   const ev = await call('/api/events', { cookie: student.cookie, body: { events: [
     { t: 'page_view', ts: new Date().toISOString(), sid: 's1', gid: 'grp-a', p: { page: 'games' } },

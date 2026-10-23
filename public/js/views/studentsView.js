@@ -2,7 +2,7 @@
  * Students Management View - Full CRUD, Search, Filter by Group/Level, and Student Details
  */
 
-import { store } from '../store.js';
+import { store, formatGrade, gradeSelectHtml } from '../store.js';
 import { auth } from '../auth.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -142,7 +142,7 @@ export const StudentsView = {
                     </span>
                   </div>
                 ` : ''}
-                <div class="student-grade-school">${student.grade} • ${student.school || 'Школа не указана'}</div>
+                <div class="student-grade-school">${formatGrade(student.grade)} • ${student.school || 'Школа не указана'}</div>
               </div>
             </div>
             <div class="student-points-badge">⭐ ${student.totalPoints || 0}</div>
@@ -315,8 +315,8 @@ export const StudentsView = {
               <input type="tel" name="phone" class="form-control" placeholder="+7 (999) 000-00-00">
             </div>
             <div class="form-group">
-              <label class="form-label">Класс (цифра и буква)</label>
-              <input type="text" name="grade" class="form-control" placeholder="например, 8-Б">
+              <label class="form-label">Класс / курс</label>
+              ${gradeSelectHtml('')}
             </div>
           </div>
 
@@ -435,8 +435,8 @@ export const StudentsView = {
               <input type="tel" name="phone" class="form-control" value="${student.phone || ''}">
             </div>
             <div class="form-group">
-              <label class="form-label">Класс</label>
-              <input type="text" name="grade" class="form-control" value="${student.grade || ''}">
+              <label class="form-label">Класс / курс</label>
+              ${gradeSelectHtml(student.grade)}
             </div>
           </div>
 
@@ -544,7 +544,7 @@ export const StudentsView = {
                     </span>
                   </div>
                 ` : ''}
-                <div class="text-sm text-muted">${student.grade} • ${student.school} • ${student.shift} смена</div>
+                <div class="text-sm text-muted">${formatGrade(student.grade)} • ${student.school} • ${student.shift} смена</div>
                 <div class="badge badge-planned" style="margin-top:4px;">👥 ${group ? group.name : 'Индивидуальное обучение'}${group?.scheduleTime ? ` • ⏰ ${group.scheduleTime}` : ''}</div>
               </div>
             </div>
@@ -946,7 +946,7 @@ export const StudentsView = {
                 <input type="text" class="form-control form-control-sm preview-school" value="${st.school || ''}" placeholder="Школа / Лицей" />
               </td>
               <td>
-                <input type="text" class="form-control form-control-sm preview-grade" value="${st.grade || ''}" placeholder="Класс" style="width:75px;" />
+                <input type="text" class="form-control form-control-sm preview-grade" value="${formatGrade(st.grade) || ''}" placeholder="Класс" style="width:75px;" />
               </td>
               <td>
                 <select class="form-control form-control-sm preview-shift" style="width:95px;">

@@ -2,13 +2,19 @@
  * Lesson Attendance Modal Component with Multi-Select Support
  */
 
-import { store } from '../store.js';
+import { store, formatGrade } from '../store.js';
 import { modal } from './modal.js';
 import { toast } from './toast.js';
 import { renderStudentAvatarHtml } from './avatarCustomization.js';
 
-export function openAttendanceModal(lessonOrId, onSave = null) {
+/**
+ * openAttendanceModal(lessonOrId, onSave)  or  openAttendanceModal(lessonOrId, groupId, 'YYYY-MM-DD', onSave)
+ * Marks are saved for one lesson date (default: today).
+ */
+export function openAttendanceModal(lessonOrId, arg2 = null, arg3 = null, arg4 = null) {
+  const onSave = typeof arg2 === 'function' ? arg2 : (typeof arg4 === 'function' ? arg4 : null);
   const lesson = typeof lessonOrId === 'string' ? store.getLessonById(lessonOrId) : lessonOrId;
+  const lessonDate = lesson ? store.lessonDateFor(lesson, typeof arg3 === 'string' ? arg3 : null) : store.todayDateStr();
   if (!lesson) {
     toast.error('Урок не найден');
     return;
@@ -27,7 +33,7 @@ export function openAttendanceModal(lessonOrId, onSave = null) {
 
   // Current attendance map: { [studentId]: 'present' | 'absent' }
   // If not previously recorded, default to all present
-  const initialAttendance = store.getLessonAttendance(lesson.id);
+  const initialAttendance = store.getLessonAttendance(lesson.id, lessonDate);
   const draft = {};
   students.forEach(s => {
     if (initialAttendance && initialAttendance[s.id] !== undefined) {
@@ -76,7 +82,7 @@ export function openAttendanceModal(lessonOrId, onSave = null) {
                   </div>
                   <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
                     ${s.studentTitle ? `<span class="student-title-badge light" style="font-size:0.65rem; padding:1px 6px;">${s.studentTitle}</span>` : ''}
-                    <span style="font-size:0.72rem; color:var(--color-text-muted);">${s.grade} • ${s.school}</span>
+                    <span style="font-size:0.72rem; color:var(--color-text-muted);">${formatGrade(s.grade)} • ${s.school}</span>
                   </div>
                 </div>
               </div>
@@ -97,7 +103,7 @@ export function openAttendanceModal(lessonOrId, onSave = null) {
     <div>
       <div style="margin-bottom:var(--space-4); padding-bottom:var(--space-3); border-bottom:1px solid var(--color-border-subtle);">
         <div style="display:flex; align-items:center; gap:8px; font-size:var(--font-size-sm); color:var(--color-primary); font-weight:700;">
-          <span>📅 ${lesson.dayOfWeek || ''} ${lesson.date || ''} • ⏰ ${lesson.time || ''}</span>
+          <span>📅 ${lesson.dayOfWeek || ''} ${lessonDate.split('-').reverse().join('.')} • ⏰ ${lesson.time || ''}</span>
           <span>•</span>
           <span>👥 ${group ? group.name : 'Индивидуально'}</span>
         </div>
@@ -178,7 +184,7 @@ export function openAttendanceModal(lessonOrId, onSave = null) {
       });
 
       document.getElementById('btn-save-attendance')?.addEventListener('click', () => {
-        store.saveLessonAttendance(lesson.id, draft);
+        store.saveLessonAttendance(lesson.id, draft, lessonDate);
         const { presentCount, total } = getStats();
         toast.success(`Посещаемость сохранена: ${presentCount} из ${total} присутствовали.`);
         modal.close();

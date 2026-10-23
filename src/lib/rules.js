@@ -92,6 +92,12 @@ export function sanitizeRow(user, coll, id, data) {
     case 'pointRecords':
       if (data.studentId === user.uid) return data;
       return { ...data, comment: '' };
+    case 'attendance': {
+      // A student sees only their own marks (for the attendance stats in their cabinet)
+      const mark = data && data.marks ? data.marks[user.uid] : undefined;
+      if (mark === undefined) return undefined;
+      return { ...data, marks: { [user.uid]: mark } };
+    }
     case 'payments':
       return (data.studentId === user.uid || String(id).startsWith(user.uid + '_')) ? data : undefined;
     case 'activityLogs':

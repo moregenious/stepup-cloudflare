@@ -1,4 +1,4 @@
-import { store } from '../store.js';
+import { store, formatGrade, gradeSelectHtml } from '../store.js';
 import { auth } from '../auth.js';
 import { toast } from '../components/toast.js';
 import { modal } from '../components/modal.js';
@@ -227,8 +227,8 @@ export const SurveyView = {
 
               <div class="survey-2col-grid" style="margin-top: var(--space-4);">
                 <div class="form-group">
-                  <label class="form-label">Класс</label>
-                  <input type="text" name="grade" class="form-control" value="${student.grade || ''}" placeholder="например, 5 «А»">
+                  <label class="form-label">Класс / курс</label>
+                  ${gradeSelectHtml(student.grade, { required: true })}
                 </div>
 
                 <div class="form-group">
@@ -479,7 +479,7 @@ export const SurveyView = {
         <tr>
           <td>
             <div style="font-weight: 700; color: var(--color-text-main);">${s.fullName}</div>
-            <div class="text-xs text-muted">${grp ? grp.name : 'Индивидуально'} • ${s.grade || '—'}, ${s.school || '—'}</div>
+            <div class="text-xs text-muted">${grp ? grp.name : 'Индивидуально'} • ${formatGrade(s.grade) || '—'}, ${s.school || '—'}</div>
           </td>
           <td>
             <div style="font-weight: 600;">🎂 ${bday}</div>

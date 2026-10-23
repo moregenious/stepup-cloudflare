@@ -2,7 +2,7 @@
  * Admin Dashboard View - Overview, KPIs with Groups, Schedule and Quick Actions
  */
 
-import { store } from '../store.js';
+import { store, formatGrade } from '../store.js';
 import { auth } from '../auth.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -17,7 +17,8 @@ export const AdminDashboard = {
     const recentPoints = store.getPointRecords().slice(0, 5);
 
     // Top students by points
-    const topStudents = [...students].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0)).slice(0, 4);
+    // By earned points: spending in the shop must not push a student down
+    const topStudents = [...students].sort((a, b) => (b.lifetimePoints || 0) - (a.lifetimePoints || 0)).slice(0, 4);
 
     container.innerHTML = `
       <div class="section-header">
@@ -205,10 +206,10 @@ export const AdminDashboard = {
                       <span style="font-weight: 700; color: var(--color-text-muted); width: 16px;">#${idx + 1}</span>
                       <div>
                         <div class="font-semibold text-sm">${s.fullName}</div>
-                        <div class="text-xs text-muted">${s.grade} • ${grp ? grp.name : 'Индивидуально'}</div>
+                        <div class="text-xs text-muted">${formatGrade(s.grade)} • ${grp ? grp.name : 'Индивидуально'}</div>
                       </div>
                     </div>
-                    <span class="badge badge-level level-${s.level.toLowerCase()}">${s.totalPoints} ⭐</span>
+                    <span class="badge badge-level level-${s.level.toLowerCase()}" title="Заработано за всё время (баланс: ${s.totalPoints || 0} ⭐)">${s.lifetimePoints || 0} ⭐</span>
                   </div>
                 `;
               }).join('')}

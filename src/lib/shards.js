@@ -32,7 +32,8 @@ export const LIST_COLLS = {
 
 /** Object-map collections: row id = map key */
 export const MAP_COLLS = {
-  payments: 2
+  payments: 2,
+  attendance: 2   // key: <groupId or ind-studentId>_<YYYY-MM-DD> -> { date, groupId, marks: { studentId: 'present' | 'absent' } }
 };
 
 /** Object-map collections where every key gets its own shard (large values, e.g. one textbook) */
