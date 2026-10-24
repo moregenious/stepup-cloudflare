@@ -3230,6 +3230,8 @@ class Store {
 
   // --- Points & Grades System ---
   getPointRecords(studentId = null) {
+    // Also accepts { studentId } (used by the classroom window)
+    if (studentId && typeof studentId === 'object') studentId = studentId.studentId || null;
     let list = [...this.state.pointRecords];
     if (studentId) {
       list = list.filter(p => p.studentId === studentId);
