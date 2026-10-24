@@ -7,10 +7,11 @@
  */
 
 import { store } from '../store.js';
+import { GAME_RULES } from '../shared/gameStreak.js';
 import { auth } from '../auth.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
-import { PRESET_EMOJIS, AVAILABLE_FRAMES, AVAILABLE_TITLES, SECRET_TITLES, renderStudentAvatarHtml, titlePrice, getUnlockedSecretTitles } from '../components/avatarCustomization.js';
+import { PRESET_EMOJIS, AVAILABLE_FRAMES, SECRET_TITLES, renderStudentAvatarHtml, titlePrice, getUnlockedSecretTitles } from '../components/avatarCustomization.js';
 
 export const ShopView = {
   activeTab: 'customization', // 'customization' | 'staff' | 'purchases'
@@ -90,6 +91,9 @@ export const ShopView = {
           <button type="button" class="btn ${this.activeTab === 'customization' ? 'btn-primary' : 'btn-ghost'} shop-main-tab" data-tab="customization" style="font-weight: 700; font-size: 0.95rem;">
             <span>🎨 Кастомизация профиля</span>
           </button>
+          <button type="button" class="btn ${this.activeTab === 'streak' ? 'btn-primary' : 'btn-ghost'} shop-main-tab" data-tab="streak" style="font-weight: 700; font-size: 0.95rem;">
+            <span>🔥 Серия</span>
+          </button>
           <button type="button" class="btn ${this.activeTab === 'staff' ? 'btn-primary' : 'btn-ghost'} shop-main-tab" data-tab="staff" style="font-weight: 700; font-size: 0.95rem;">
             <span>🎒 Staff (Мерч и товары)</span>
           </button>
@@ -113,6 +117,8 @@ export const ShopView = {
       return this.renderCustomizationTab(student, isStudent);
     } else if (this.activeTab === 'staff') {
       return this.renderStaffTab(student, isStudent, isAdmin, isTeacher);
+    } else if (this.activeTab === 'streak') {
+      return this.renderStreakTab(student, isStudent);
     } else if (this.activeTab === 'purchases') {
       return this.renderPurchasesTab(student, isStudent, isTeacher, isAdmin);
     }
@@ -238,9 +244,28 @@ export const ShopView = {
             `;
           })()}
 
+          ${!isStudent ? `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom: var(--space-3); padding: 10px 14px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: var(--radius-lg);">
+              <span style="font-size:0.85rem; color:#3730a3; font-weight:600;">⚙️ Управление титулами: добавляйте новые, меняйте название, значок и цену или убирайте из магазина. Купленные учениками титулы у них остаются.</span>
+              <button type="button" class="btn btn-sm btn-primary btn-title-new">➕ Новый титул</button>
+            </div>
+          ` : ''}
           <!-- Titles Grid -->
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: var(--space-3);">
-            ${AVAILABLE_TITLES.map(t => {
+            ${store.getTitlesCatalog().map(t => {
+              if (!isStudent) {
+                return `
+                  <div class="card" style="padding: var(--space-4); border: 1.5px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-bg-card); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                    <div>
+                      <div style="font-weight: 700; font-size: 0.95rem; color: var(--color-text-main); display: flex; align-items: center; gap: 6px;"><span>${t.icon}</span> <span>${t.text}</span></div>
+                      <div style="font-size: 0.72rem; margin-top: 2px; color:#b45309; font-weight:700;">${titlePrice(t)} ⭐</div>
+                    </div>
+                    <div style="display:flex; gap:4px;">
+                      <button type="button" class="btn btn-xs btn-ghost btn-title-edit" data-id="${t.id}" title="Изменить">✏️</button>
+                      <button type="button" class="btn btn-xs btn-ghost btn-title-delete" data-id="${t.id}" title="Убрать из магазина" style="color:var(--color-danger);">🗑</button>
+                    </div>
+                  </div>`;
+              }
               const fullTitle = `${t.icon} ${t.text}`;
               const isUnlocked = unlockedTitles.some(ut => ut.includes(t.text));
               const isEquipped = student?.studentTitle?.includes(t.text);
@@ -290,6 +315,63 @@ export const ShopView = {
   // -------------------------------------------------------------
   // TAB 2: STAFF (School Merchandise & Physical Goods)
   // -------------------------------------------------------------
+  // -------------------------------------------------------------
+  // TAB: STREAK (daily mini-game streak items). Items are listed in STREAK_SHOP_ITEMS so new ones
+  // (e.g. things for a streak pet) can be added later in one place.
+  // -------------------------------------------------------------
+  renderStreakTab(student, isStudent) {
+    const items = [
+      { id: 'streak_freeze', icon: '❄️', name: 'Заморозка серии', price: GAME_RULES.FREEZE_PRICE,
+        desc: `Если пропустить день, заморозка сработает сама: серия и недельный лимит игр не упадут. Можно хранить до ${GAME_RULES.MAX_FREEZES} штук.` }
+    ];
+    if (isStudent && student) {
+      const g = store.getStudentGameProgress(student.id);
+      const prog = { freezes: store.getStreakFreezes(student.id) };
+      const frozen = (store.getStudentById(student.id)?.gameLedger?.frozen) || [];
+      return `
+        <div class="card" style="padding: var(--space-5); margin-bottom: var(--space-4); background: linear-gradient(135deg, #0c4a6e, #1e3a8a); color:#fff; border:none;">
+          <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center;">
+            <div><div style="font-size:0.8rem; color:#bae6fd;">Твоя серия</div><div style="font-size:2rem; font-weight:800;">🔥 ${g.dailyStreak || 0} дн.</div></div>
+            <div><div style="font-size:0.8rem; color:#bae6fd;">Заморозки</div><div style="font-size:2rem; font-weight:800;">${'❄️'.repeat(prog.freezes) || '—'} <span style="font-size:1rem; color:#bae6fd;">${prog.freezes} из ${GAME_RULES.MAX_FREEZES}</span></div></div>
+            <div><div style="font-size:0.8rem; color:#bae6fd;">Недельный лимит игр</div><div style="font-size:2rem; font-weight:800;">${g.weeklyLimit} ⭐</div></div>
+          </div>
+          ${frozen.length ? `<div style="margin-top:10px; font-size:0.8rem; color:#e0f2fe;">❄️ Заморозка спасла серию: ${frozen.slice(-5).map(d => d.slice(8, 10) + '.' + d.slice(5, 7)).join(', ')}</div>` : ''}
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: var(--space-3);">
+          ${items.map(it => {
+            const full = it.id === 'streak_freeze' && prog.freezes >= GAME_RULES.MAX_FREEZES;
+            return `
+              <div class="card" style="padding: var(--space-4); border:1.5px solid #7dd3fc; border-radius: var(--radius-lg);">
+                <div style="font-size:2rem;">${it.icon}</div>
+                <div style="font-weight:800; font-size:1rem; margin-top:4px;">${it.name}</div>
+                <div class="text-xs text-muted" style="margin:6px 0 12px;">${it.desc}</div>
+                <button type="button" class="btn btn-sm btn-primary btn-buy-streak" data-id="${it.id}" ${full ? 'disabled' : ''}>${full ? `У тебя уже ${GAME_RULES.MAX_FREEZES} из ${GAME_RULES.MAX_FREEZES}` : `Купить за ${it.price} ⭐`}</button>
+              </div>`;
+          }).join('')}
+        </div>
+        <div class="text-xs text-muted" style="margin-top: var(--space-4);">🔜 Скоро в этом разделе появятся новые товары для серии.</div>`;
+    }
+    // Teachers / admin: give a freeze (e.g. the student was ill) and see recent freezes
+    const students = store.getStudents({ status: 'active' });
+    const recent = (store.state.purchases || []).filter(p => p.type === 'streak_freeze').slice(0, 15);
+    return `
+      <div class="card" style="padding: var(--space-5); margin-bottom: var(--space-4);">
+        <h3 class="card-title">❄️ Подарить заморозку серии</h3>
+        <p class="text-xs text-muted" style="margin:4px 0 12px;">Например, если ученик заболел: пропущенные дни не сломают его серию и лимит игр. Ученик может хранить до ${GAME_RULES.MAX_FREEZES} заморозок; ученики могут и сами купить её в магазине за ${GAME_RULES.FREEZE_PRICE} ⭐. Победитель рейтинга группы за месяц получает заморозку автоматически.</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <select id="streak-gift-student" class="form-control" style="min-width:220px; flex:1;">
+            ${students.map(s => `<option value="${s.id}">${s.fullName} (❄️ ${store.getStreakFreezes(s.id)})</option>`).join('')}
+          </select>
+          <input id="streak-gift-reason" class="form-control" placeholder="Причина (например: болел)" style="flex:1; min-width:180px;">
+          <button type="button" class="btn btn-primary btn-streak-gift">❄️ Подарить</button>
+        </div>
+      </div>
+      <div class="card" style="padding: var(--space-4);">
+        <h3 class="card-title" style="margin-bottom:8px;">Последние заморозки</h3>
+        ${recent.length ? `<ul class="att-absences">${recent.map(p => `<li><strong>${p.studentName || ''}</strong> — ${p.price ? `купил(а) за ${p.price} ⭐` : (p.reason || 'подарок')} · ${new Date(p.date).toLocaleDateString('ru-RU')}</li>`).join('')}</ul>` : '<div class="text-muted text-sm">Пока нет.</div>'}
+      </div>`;
+  },
+
   renderStaffTab(student, isStudent, isAdmin, isTeacher) {
     const items = store.getShopItems();
 
@@ -483,6 +565,60 @@ export const ShopView = {
         this.render(container);
       });
     });
+
+    // Streak shop
+    container.querySelectorAll('.btn-buy-streak').forEach(btn => btn.addEventListener('click', () => {
+      if (!student) return;
+      if (!confirm(`Купить ❄️ заморозку серии за ${GAME_RULES.FREEZE_PRICE} ⭐?\nОна сработает сама, если ты пропустишь день.`)) return;
+      const res = store.makePurchase(student.id, { type: 'streak_freeze' });
+      if (res.success) toast.success('❄️ Заморозка куплена!'); else toast.error(res.message);
+      setTimeout(() => this.render(container), 1200);
+      this.render(container);
+    }));
+    container.querySelector('.btn-streak-gift')?.addEventListener('click', () => {
+      const sid = container.querySelector('#streak-gift-student')?.value;
+      const reason = container.querySelector('#streak-gift-reason')?.value.trim() || 'Подарок преподавателя';
+      const res = store.grantStreakFreeze(sid, reason);
+      if (res.success) toast.success(res.message); else toast.error(res.message);
+      setTimeout(() => this.render(container), 1200);
+    });
+
+    // Titles management (teachers / admin)
+    const openTitleForm = (t = null) => {
+      modal.open({
+        title: t ? 'Изменить титул' : 'Новый титул',
+        bodyHtml: `
+          <form id="form-title-edit" style="display:flex; flex-direction:column; gap:10px;">
+            <div class="form-group" style="margin:0;"><label class="form-label">Значок (эмодзи)</label><input name="icon" class="form-control" value="${t ? t.icon : '🏷️'}" maxlength="16" required></div>
+            <div class="form-group" style="margin:0;"><label class="form-label">Название</label><input name="text" class="form-control" value="${t ? t.text.replace(/"/g, '&quot;') : ''}" maxlength="60" required></div>
+            <div class="form-group" style="margin:0;"><label class="form-label">Цена, ⭐</label><input name="price" type="number" min="0" step="10" class="form-control" value="${t ? (t.price ?? 150) : 150}" required></div>
+            ${t ? '<div class="form-hint">Если поменять название или значок, он поменяется и у учеников, которые уже купили этот титул.</div>' : ''}
+          </form>`,
+        footerHtml: `<button type="button" class="btn btn-secondary" onclick="document.getElementById('main-modal').close()">Отмена</button><button type="submit" form="form-title-edit" class="btn btn-primary">Сохранить</button>`,
+        onOpen: () => {
+          document.getElementById('form-title-edit')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const res = store.saveTitle({ id: t ? t.id : null, text: fd.get('text'), icon: fd.get('icon'), price: fd.get('price') });
+            if (!res.success) { toast.error(res.message); return; }
+            modal.close();
+            toast.success('Титул сохранён');
+            this.render(container);
+          });
+        }
+      });
+    };
+    container.querySelector('.btn-title-new')?.addEventListener('click', () => openTitleForm());
+    container.querySelectorAll('.btn-title-edit').forEach(btn => btn.addEventListener('click', () => {
+      openTitleForm(store.getTitlesCatalog().find(x => x.id === btn.dataset.id));
+    }));
+    container.querySelectorAll('.btn-title-delete').forEach(btn => btn.addEventListener('click', () => {
+      const t = store.getTitlesCatalog().find(x => x.id === btn.dataset.id);
+      if (!t || !confirm(`Убрать титул «${t.text}» из магазина?\nУ учеников, которые его уже купили, он останется.`)) return;
+      store.deleteTitle(t.id);
+      toast.info('Титул убран из магазина');
+      this.render(container);
+    }));
 
     // 2. Sub-tab Switching for Customization
     container.querySelectorAll('.sub-custom-tab').forEach(btn => {

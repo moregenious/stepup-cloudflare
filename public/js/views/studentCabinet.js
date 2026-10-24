@@ -514,6 +514,25 @@ export const StudentCabinet = {
         </a>
       </div>
 
+      ${(() => {
+        // Monthly 1st place reward (streak freeze) — shown until the student closes it
+        const rewards = (store.state.purchases || []).filter(p => p.studentId === student.id && String(p.id).startsWith('frz-top-'));
+        let seen = [];
+        try { seen = JSON.parse(localStorage.getItem('stepup_seen_rewards') || '[]'); } catch (e) { seen = []; }
+        const fresh = rewards.filter(r => !seen.includes(r.id));
+        return fresh.map(r => `
+          <div class="card reward-banner" data-reward-id="${r.id}" style="margin-bottom: var(--space-4); padding: var(--space-4); background: linear-gradient(135deg, #fef3c7, #fde68a); border: 1.5px solid #f59e0b; display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+            <div style="display:flex; gap:12px; align-items:center;">
+              <span style="font-size:2rem;">🏆</span>
+              <div>
+                <div style="font-weight:800; color:#92400e;">Поздравляем! ${r.reason || '1 место в рейтинге группы'}</div>
+                <div style="font-size:0.85rem; color:#78350f;">Награда: ❄️ заморозка серии — она спасёт твою серию, если пропустишь день.</div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-primary btn-reward-ok" data-reward-id="${r.id}">Ура! 🎉</button>
+          </div>`).join('');
+      })()}
+
       <!-- Points & Grades History (История начисления баллов - Full Width) -->
       <div class="card" style="margin-bottom: var(--space-6);">
         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2);">
@@ -630,6 +649,13 @@ export const StudentCabinet = {
   },
 
   bindEvents(container, student, group) {
+    container.querySelectorAll('.btn-reward-ok').forEach(btn => btn.addEventListener('click', () => {
+      let seen = [];
+      try { seen = JSON.parse(localStorage.getItem('stepup_seen_rewards') || '[]'); } catch (e) { seen = []; }
+      seen.push(btn.dataset.rewardId);
+      try { localStorage.setItem('stepup_seen_rewards', JSON.stringify(seen.slice(-50))); } catch (e) { /* ignore */ }
+      btn.closest('.reward-banner')?.remove();
+    }));
     // Logout button
     // (handled by the global logout handler in app.js, which waits for unsaved changes)
 

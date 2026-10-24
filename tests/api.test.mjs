@@ -162,6 +162,20 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   assert.equal((await call('/api/auth', { body: { action: 'staff', login: 'admin', password: 'NewAdmin77' } })).status, 200);
   assert.equal((await call('/api/auth', { body: { action: 'staff', login: 'admin', password: 'AdminPass1' } })).status, 401);
 
+  // Streak freezes: bought for a fixed price (max 3), or given by a teacher for free
+  const frBuy = await call('/api/push', { cookie: student.cookie, body: { ops: [{ c: 'purchases', id: 'frz-1', t: 'put', v: { studentId: 'stu-1', type: 'streak_freeze', price: 1 } }] } });
+  assert.equal(frBuy.json.results[0].ok, true, frBuy.text);
+  const gift = (id) => call('/api/push', { cookie: teacher.cookie, body: { ops: [{ c: 'purchases', id, t: 'put', v: { studentId: 'stu-1', type: 'streak_freeze', price: 50, itemName: 'Подарок' } }] } });
+  await gift('frz-g1'); await gift('frz-g1'); await gift('frz-g2');
+  const frState = await call('/api/state', { body: { known: {} }, cookie: student.cookie });
+  const meFr = rowsOf(frState, 'students').find(s => s.id === 'stu-1');
+  assert.equal(meFr.gameLedger.freezes, 3, 'bought 1 + 2 gifts (repeated gift counted once)');
+  const bought = rowsOf(frState, 'purchases').find(p => p.id === 'frz-1');
+  assert.equal(bought.price, 150, 'price is set by the server');
+  assert.equal(rowsOf(frState, 'purchases').find(p => p.id === 'frz-g1').price, 0, 'gift is free');
+  const frMax = await call('/api/push', { cookie: student.cookie, body: { ops: [{ c: 'purchases', id: 'frz-2', t: 'put', v: { studentId: 'stu-1', type: 'streak_freeze', price: 150 } }] } });
+  assert.equal(frMax.json.results[0].ok, false, 'no more than 3');
+
   // Attendance per lesson date: staff writes, a student sees only own mark and cannot write
   const att = await call('/api/push', { cookie: teacher.cookie, body: { ops: [{ c: 'attendance', id: 'grp-a_2026-10-23', t: 'put', v: { date: '2026-10-23', groupId: 'grp-a', marks: { 'stu-1': 'absent', 'stu-3': 'present' } } }] } });
   assert.equal(att.json.results[0].ok, true, att.text);

@@ -949,3 +949,16 @@ dialog.app-modal::backdrop {
   .lm-paycell { order: 3; }
   .lm-actions { order: 4; }
 }
+/* Computer: every category as a small icon+points button; phone: three quick buttons */
+.lm-quick-mobile, .lm-quick-desk { display: contents; }
+.lm-quick-desk { display: none; }
+@media (min-width: 901px) {
+  .lm-quick-mobile { display: none; }
+  .lm-quick-desk { display: contents; }
+  .lm-actions { gap: 4px; flex-wrap: nowrap; }
+  .lm-pt.lm-ico { min-width: 0; padding: 0 8px; font-size: 0.8rem; white-space: nowrap; }
+}
+@media (min-width: 901px) and (max-width: 1250px) {
+  .lm-actions { flex-wrap: wrap; justify-content: flex-end; }
+}
+.lm-pt.lm-freeze { border-color: #7dd3fc; background: #f0f9ff; min-width: 36px; }

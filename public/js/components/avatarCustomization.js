@@ -2,7 +2,7 @@
  * Student Avatar, Frames & Titles Customization Component
  */
 
-import { store } from '../store.js';
+import { store, DEFAULT_TITLES } from '../store.js';
 import { modal } from './modal.js';
 import { toast } from './toast.js';
 
@@ -17,23 +17,17 @@ export const AVAILABLE_FRAMES = [
   { id: 'frame-rainbow', name: 'Радужный вихрь', icon: '🌈', desc: 'Спектральный перелив' }
 ];
 
-export const AVAILABLE_TITLES = [
-  { text: 'Лучший болтун', icon: '🗣️' },
-  { text: 'Гений грамматики', icon: '🧠' },
-  { text: 'Король домашки', icon: '👑' },
-  { text: 'Гроза Present Perfect', icon: '⚡' },
-  { text: 'Ночной зубрила', icon: '🦉' },
-  { text: 'Шерлок Холмс произношения', icon: '🕵️‍♂️' },
-  { text: 'Шпион в Лондоне', icon: '🇬🇧' },
-  { text: 'Главный по мемам', icon: '😎' },
-  { text: 'Генератор вопросов', icon: '❓' },
-  { text: 'Слушатель на 100%', icon: '🎧' },
-  { text: 'Повелитель неправильных глаголов', icon: '⚔️' },
-  { text: 'Будущий полиглот', icon: '🚀' },
-  { text: 'six-seven', icon: '6️⃣7️⃣', price: 500 }
-];
+/** Kept for compatibility; the live list is store.getTitlesCatalog() (teachers can edit it) */
+export const AVAILABLE_TITLES = DEFAULT_TITLES;
 
 export const DEFAULT_TITLE_PRICE = 150;
+
+/** Titles a student bought that were later removed from the shop: still theirs to wear */
+export function ownedRetiredTitles(student) {
+  const owned = Array.isArray(student?.unlockedTitles) ? student.unlockedTitles : [];
+  const known = new Set([...store.getTitlesCatalog().map(t => t.text), ...SECRET_TITLES.map(t => t.text)]);
+  return owned.filter(t => !known.has(t)).map(t => ({ id: 'old-' + t, text: t, icon: '🏷️', price: 0 }));
+}
 export const titlePrice = (t) => (t && t.price) || DEFAULT_TITLE_PRICE;
 
 /** Secret titles this student has earned in mini-games (bought titles are not included) */
@@ -101,7 +95,7 @@ export function renderStudentAvatarHtml(student, options = {}) {
   const titleAttr = `${fullName}${student?.studentTitle ? ` • ${student.studentTitle}` : ''}`;
 
   return `
-    <div class="custom-avatar-wrapper size-${size} ${frame} ${extraClass}" title="${titleAttr}">
+    <div class="custom-avatar-wrapper size-${size} ${frame} ${extraClass}" title="${titleAttr}"${student?.id && options.zoom !== false ? ` data-avatar-sid="${student.id}"` : ''}>
       ${decoHtml}
       <div class="custom-avatar-inner">
         ${innerContent}
@@ -294,7 +288,7 @@ export function openCustomizationModal(student, onSave = null) {
           <button type="button" class="title-choice-chip ${!draft.studentTitle ? 'selected' : ''}" data-title="" data-unlocked="1">
             <span>⚪ Без титула</span>
           </button>
-          ${AVAILABLE_TITLES.map(t => {
+          ${[...store.getTitlesCatalog(), ...ownedRetiredTitles(student)].map(t => {
             const isUnlocked = unlockedTitles.some(ut => ut.includes(t.text));
             const isSelected = draft.studentTitle.includes(t.text);
             return `
@@ -520,4 +514,40 @@ export function openCustomizationModal(student, onSave = null) {
       });
     }
   });
+}
+
+
+/**
+ * Full-screen avatar viewer: click any student avatar (ratings, podium, lists) to see it big,
+ * together with the animated frame effects.
+ */
+export function openAvatarViewer(studentId) {
+  const st = store.getStudentById(studentId);
+  if (!st) return;
+  document.querySelector('.avatar-viewer')?.remove();
+  const el = document.createElement('div');
+  el.className = 'avatar-viewer';
+  el.innerHTML = `
+    <div class="avatar-viewer-stage" style="width:${Math.round(Math.min(window.innerWidth * 0.7, window.innerHeight * 0.55, 340))}px; height:${Math.round(Math.min(window.innerWidth * 0.7, window.innerHeight * 0.55, 340))}px;">
+      <div class="avatar-viewer-scale" style="transform: scale(${(Math.min(window.innerWidth * 0.7, window.innerHeight * 0.55, 340) / 88).toFixed(2)});">${renderStudentAvatarHtml(st, { size: 'hero', zoom: false })}</div>
+    </div>
+    <div class="avatar-viewer-name">${st.fullName || ''}</div>
+    ${st.studentTitle ? `<div class="avatar-viewer-title"><span class="student-title-badge">${st.studentTitle}</span></div>` : ''}
+    <div class="avatar-viewer-hint">Нажмите, чтобы закрыть</div>`;
+  const close = () => { el.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  el.addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(el);
+}
+
+if (typeof document !== 'undefined' && !window.__avatarViewerBound) {
+  window.__avatarViewerBound = true;
+  document.addEventListener('click', (e) => {
+    const av = e.target.closest && e.target.closest('[data-avatar-sid]');
+    if (!av || av.closest('.avatar-viewer') || av.classList.contains('size-preview')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openAvatarViewer(av.getAttribute('data-avatar-sid'));
+  }, true);
 }

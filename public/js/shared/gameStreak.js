@@ -6,6 +6,8 @@
  *  - A day counts for the streak when the student scores at least MIN_DAILY_SCORE points in mini-games that day.
  *  - Every DAYS_PER_LEVEL counted days in a row raise the weekly limit by STEP (BASE … MAX).
  *  - Every missed day lowers the limit by STEP (never below BASE) and restarts the 7-day count.
+ *  - A streak freeze (bought in the shop or given by a teacher) is used up automatically for a missed day:
+ *    the streak and the limit stay as they were. At most MAX_FREEZES can be kept.
  *  - Days and weeks follow the school's time zone (UTC+5), weeks start on Monday.
  */
 
@@ -16,7 +18,9 @@ export const GAME_RULES = Object.freeze({
   DAYS_PER_LEVEL: 7,
   MIN_DAILY_SCORE: 10,
   MAX_PER_GAME: 100,
-  TZ_OFFSET_MIN: 300
+  TZ_OFFSET_MIN: 300,
+  FREEZE_PRICE: 150,
+  MAX_FREEZES: 3
 });
 
 const MAX_LEVEL = (GAME_RULES.MAX - GAME_RULES.BASE) / GAME_RULES.STEP;
@@ -64,7 +68,9 @@ export function normalizeLedger(raw) {
     anchor: isDay(gl.anchor) ? gl.anchor : '',
     streak: num(gl.streak),
     level: num(gl.level, 0, MAX_LEVEL),
-    n: num(gl.n)
+    n: num(gl.n),
+    freezes: num(gl.freezes, 0, GAME_RULES.MAX_FREEZES),
+    frozen: Array.isArray(gl.frozen) ? gl.frozen.filter(isDay).slice(-10) : []
   };
 }
 
@@ -78,8 +84,17 @@ function settle(gl, today) {
   if (gl.anchor) {
     const missed = t - dayIndex(gl.anchor) - 1;
     if (missed > 0) {
-      gl.level = Math.max(0, gl.level - missed);
-      gl.streak = 0;
+      const from = dayIndex(gl.anchor);
+      for (let k = 1; k <= missed; k++) {
+        if (gl.freezes > 0) {
+          // A freeze covers the day: streak and limit are kept
+          gl.freezes -= 1;
+          gl.frozen = [...gl.frozen, dayFromIndex(from + k)].slice(-10);
+        } else {
+          gl.level = Math.max(0, gl.level - 1);
+          gl.streak = 0;
+        }
+      }
       gl.anchor = dayFromIndex(t - 1);
     }
   }
@@ -100,7 +115,10 @@ function summary(gl, today) {
     daysToNextLevel: gl.level >= MAX_LEVEL ? 0 : GAME_RULES.DAYS_PER_LEVEL - (gl.streak % GAME_RULES.DAYS_PER_LEVEL),
     todayScore: gl.dayScore,
     todayCounted: gl.anchor === today,
-    currentWeekKey: gl.week
+    currentWeekKey: gl.week,
+    freezes: gl.freezes,
+    maxFreezes: GAME_RULES.MAX_FREEZES,
+    frozenDays: gl.frozen
   };
 }
 
@@ -130,6 +148,19 @@ export function playGame(raw, score, now = new Date()) {
   const award = Math.min(s, Math.max(0, limit - gl.pts));
   gl.pts += award;
   return { ledger: gl, award, score: s, ...summary(gl, today) };
+}
+
+/**
+ * Add one streak freeze (purchase or teacher's gift). Missed days are settled first.
+ * Returns { ok, ledger } — ok is false when the student already keeps MAX_FREEZES.
+ */
+export function addFreeze(raw, now = new Date()) {
+  const today = schoolDay(now);
+  const gl = settle(normalizeLedger(raw), today);
+  if (gl.freezes >= GAME_RULES.MAX_FREEZES) return { ok: false, ledger: gl };
+  gl.freezes += 1;
+  gl.n += 1;
+  return { ok: true, ledger: gl };
 }
 
 /**

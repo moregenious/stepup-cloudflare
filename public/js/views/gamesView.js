@@ -108,6 +108,7 @@ export const GamesView = {
               </div>
               <div style="font-size: 0.68rem; color: #e0e7ff; margin-bottom: 6px;">
                 ${progress.todayCounted ? '✅ Сегодня день засчитан в серию' : `Сегодня: ${progress.todayScore || 0} / ${progress.minDailyScore || 10} ⭐ — наберите ${progress.minDailyScore || 10}, чтобы день засчитался`}
+                · <a href="#shop" class="games-freeze-link" style="color:#bae6fd;" title="Заморозка спасает серию, если пропустить день">❄️ ${progress.freezes || 0}/${progress.maxFreezes || 3}</a>
               </div>
               <div style="width: 100%; height: 8px; background: rgba(0, 0, 0, 0.25); border-radius: 4px; overflow: hidden;">
                 <div style="width: ${weeklyPercent}%; height: 100%; background: linear-gradient(90deg, #facc15, #f59e0b); border-radius: 4px; transition: width 0.4s ease;"></div>

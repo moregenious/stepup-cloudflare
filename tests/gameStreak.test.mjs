@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { playGame, viewLedger, migrateLedger, schoolDay, weekKeyOfDay } from '../public/js/shared/gameStreak.js';
+import { playGame, viewLedger, migrateLedger, schoolDay, weekKeyOfDay, addFreeze } from '../public/js/shared/gameStreak.js';
 
 // Noon in the school's time zone (UTC+5) on the given date
 const at = (day, hh = 12) => new Date(Date.parse(day + 'T00:00:00Z') + (hh - 5) * 3600000);
@@ -84,4 +84,22 @@ test('migration keeps this week points and a live streak', () => {
   assert.equal(v.dailyStreak, 8);
   const dead = migrateLedger(null, { dailyStreak: 30, lastGameDate: '2026-10-01' }, at('2026-10-20'));
   assert.equal(viewLedger(dead, at('2026-10-20')).weeklyLimit, 100);
+});
+
+test('a freeze covers a missed day: streak and limit kept; max 3', () => {
+  let gl = playDays(null, '2026-09-07', 14); // 120, streak 14
+  gl = addFreeze(gl, at('2026-09-20')).ledger;
+  let v = viewLedger(gl, at('2026-09-22')); // 21.09 missed, covered
+  assert.equal(v.weeklyLimit, 120);
+  assert.equal(v.dailyStreak, 14);
+  assert.equal(v.freezes, 0);
+  assert.deepEqual(v.frozenDays, ['2026-09-21']);
+  gl = playGame(gl, 10, at('2026-09-22')).ledger;
+  assert.equal(viewLedger(gl, at('2026-09-22')).dailyStreak, 15, 'streak continues after the frozen day');
+  v = viewLedger(gl, at('2026-09-25')); // 23, 24 missed, no freezes
+  assert.equal(v.weeklyLimit, 100);
+  assert.equal(v.dailyStreak, 0);
+  let g2 = null;
+  for (let i = 0; i < 3; i++) g2 = addFreeze(g2, at('2026-09-20')).ledger;
+  assert.equal(addFreeze(g2, at('2026-09-20')).ok, false);
 });

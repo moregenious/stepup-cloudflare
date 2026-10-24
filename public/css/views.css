@@ -4714,3 +4714,12 @@ tr.selected-row {
     font-size: 1rem;
   }
 }
+
+/* ===== Full-screen avatar viewer ===== */
+[data-avatar-sid] { cursor: zoom-in; }
+.avatar-viewer { position: fixed; inset: 0; z-index: 10000; background: radial-gradient(circle at center, rgba(49, 46, 129, 0.92), rgba(2, 6, 23, 0.96)); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; cursor: zoom-out; animation: avatarViewerIn 0.2s ease; padding: 16px; }
+.avatar-viewer-stage { display: flex; align-items: center; justify-content: center; }
+.avatar-viewer-scale { transform-origin: center; }
+.avatar-viewer-name { color: #fff; font-size: 1.4rem; font-weight: 800; text-align: center; }
+.avatar-viewer-hint { color: rgba(255,255,255,0.55); font-size: 0.8rem; }
+@keyframes avatarViewerIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }

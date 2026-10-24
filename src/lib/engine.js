@@ -4,7 +4,7 @@
 import { config } from './config.js';
 import { getStorage } from './storage/index.js';
 import { HttpError } from './http.js';
-import { playGame, migrateLedger } from '../../public/js/shared/gameStreak.js';
+import { playGame, migrateLedger, addFreeze, GAME_RULES } from '../../public/js/shared/gameStreak.js';
 import { hashPassword, derivePin } from './security.js';
 import {
   META_PATH, CREDS_PATH, SETTINGS, LIST_COLLS,
@@ -605,6 +605,20 @@ export async function push(user, rawOps) {
           continue;
         }
 
+        if (op.c === 'purchases' && v.type === 'streak_freeze') {
+          // Streak freeze: fixed price, kept by the server in the student's game ledger
+          const fr = addFreeze(migrateLedger(selfStudent.gameLedger, selfStudent.gameStats, now), now);
+          if (!fr.ok) { reject(res, `Можно хранить не больше ${GAME_RULES.MAX_FREEZES} заморозок`); continue; }
+          const rec = { ...v, price: GAME_RULES.FREEZE_PRICE, status: 'completed', studentName: selfStudent.fullName, date: now.toISOString(), itemName: '❄️ Заморозка серии', itemIcon: '❄️' };
+          const l = getLedger(user.uid);
+          if (Math.max(0, l.gross - l.spent) < rec.price) { reject(res, 'Недостаточно баллов'); continue; }
+          selfStudent.gameLedger = fr.ledger;
+          selfStudentDirty = true;
+          writeRow(key, op.id, rec);
+          addContribution(purchaseContribution(rec), +1);
+          continue;
+        }
+
         if (op.c === 'purchases') {
           const price = Math.max(0, Number(v.price) || 0);
           if (v.type === 'staff') {
@@ -689,6 +703,22 @@ export async function push(user, rawOps) {
         addContribution(pointContribution(next), +1);
       }
       if (op.c === 'purchases') {
+        // A teacher's gift of a streak freeze (price 0): added once, when the record is created
+        if (isPlainObject(next) && next.type === 'streak_freeze' && existing) {
+          // Re-sent gift: keep it as it was (free, counted once)
+          next.price = Number(existing.price) || 0;
+          if (existing.granted !== undefined) next.granted = existing.granted;
+        }
+        if (!existing && isPlainObject(next) && next.type === 'streak_freeze') {
+          next.price = 0;
+          const skey = shardKeyFor('students', String(next.studentId || ''));
+          const st = shards[skey] ? findRowInShard(shards[skey], String(next.studentId)) : null;
+          if (st) {
+            const fr = addFreeze(migrateLedger(st.gameLedger, st.gameStats, now), now);
+            next.granted = fr.ok;
+            if (fr.ok) { st.gameLedger = fr.ledger; writeRow(skey, st.id, st); }
+          }
+        }
         addContribution(purchaseContribution(existing), -1);
         addContribution(purchaseContribution(next), +1);
       }

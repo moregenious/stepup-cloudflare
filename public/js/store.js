@@ -7,6 +7,23 @@ import { MONTH_NAMES } from './data/seedData.js';
 import { SyncEngine } from './sync.js';
 import { trackGameEnd } from './analytics.js';
 import { GAME_RULES, viewLedger, playGame, migrateLedger } from './shared/gameStreak.js';
+
+/** Titles sold in the shop before teachers edit the list (then state.titlesCatalog is used) */
+export const DEFAULT_TITLES = [
+  { id: 't-boltun', text: 'Лучший болтун', icon: '🗣️', price: 150 },
+  { id: 't-grammar', text: 'Гений грамматики', icon: '🧠', price: 150 },
+  { id: 't-hw-king', text: 'Король домашки', icon: '👑', price: 150 },
+  { id: 't-pp', text: 'Гроза Present Perfect', icon: '⚡', price: 150 },
+  { id: 't-owl', text: 'Ночной зубрила', icon: '🦉', price: 150 },
+  { id: 't-sherlock', text: 'Шерлок Холмс произношения', icon: '🕵️‍♂️', price: 150 },
+  { id: 't-spy', text: 'Шпион в Лондоне', icon: '🇬🇧', price: 150 },
+  { id: 't-memes', text: 'Главный по мемам', icon: '😎', price: 150 },
+  { id: 't-questions', text: 'Генератор вопросов', icon: '❓', price: 150 },
+  { id: 't-listener', text: 'Слушатель на 100%', icon: '🎧', price: 150 },
+  { id: 't-irregular', text: 'Повелитель неправильных глаголов', icon: '⚔️', price: 150 },
+  { id: 't-polyglot', text: 'Будущий полиглот', icon: '🚀', price: 150 },
+  { id: 't-67', text: 'six-seven', icon: '6️⃣7️⃣', price: 500 }
+];
 import { apiRequest, getServerConfig, onUnauthorized } from './api.js';
 import { logger } from './utils/logger.js';
 import { toast } from './components/toast.js';
@@ -280,6 +297,7 @@ class Store {
     this._automationRunning = true;
     try { this.autoCompletePastLessons(); } catch (e) { /* ignore */ }
     try { this.normalizeAllGrades(); } catch (e) { /* ignore */ }
+    try { this.awardMonthlyLeaders(); } catch (e) { /* ignore */ }
     this._automationRunning = false;
   }
 
@@ -1626,7 +1644,8 @@ class Store {
   }
 
   getStudentsByGroupId(groupId) {
-    return this.state.students.filter(s => s.groupId === groupId && s.status === 'active');
+    return this.state.students.filter(s => s.groupId === groupId && s.status === 'active')
+      .sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || ''), 'ru'));
   }
 
   addGroup(groupData) {
@@ -3986,6 +4005,8 @@ class Store {
       todayScore: game.todayScore,
       todayCounted: game.todayCounted,
       minDailyScore: GAME_RULES.MIN_DAILY_SCORE,
+      freezes: game.freezes,
+      maxFreezes: game.maxFreezes,
       currentWeekKey: game.currentWeekKey,
       wordsStreak: student.gameStats.wordsStreak || 0,
       irregularStreak: student.gameStats.irregularStreak || 0,
@@ -4414,12 +4435,104 @@ class Store {
     return list;
   }
 
+  // ---------------- Titles catalog (teachers can add / edit / delete) ----------------
+  getTitlesCatalog() {
+    const list = Array.isArray(this.state.titlesCatalog) ? this.state.titlesCatalog : DEFAULT_TITLES;
+    return list.filter(t => t && t.text);
+  }
+
+  /** Create or update a title. Renaming also renames it for students who already bought it. */
+  saveTitle({ id, text, icon, price }) {
+    const clean = { text: String(text || '').trim().slice(0, 60), icon: String(icon || '🏷️').trim().slice(0, 16) || '🏷️', price: Math.max(0, Math.round(Number(price) || 0)) };
+    if (!clean.text) return { success: false, message: 'Введите название титула' };
+    const list = this.getTitlesCatalog().map(t => ({ ...t }));
+    if (list.some(t => t.text.toLowerCase() === clean.text.toLowerCase() && t.id !== id)) return { success: false, message: 'Такой титул уже есть' };
+    const idx = id ? list.findIndex(t => t.id === id) : -1;
+    if (idx >= 0) {
+      const old = list[idx];
+      list[idx] = { ...old, ...clean };
+      if (old.text !== clean.text || old.icon !== clean.icon) {
+        (this.state.students || []).forEach(s => {
+          if (Array.isArray(s.unlockedTitles) && s.unlockedTitles.includes(old.text)) {
+            s.unlockedTitles = s.unlockedTitles.map(t => (t === old.text ? clean.text : t));
+          }
+          if (s.studentTitle === `${old.icon} ${old.text}`) s.studentTitle = `${clean.icon} ${clean.text}`;
+        });
+      }
+    } else {
+      list.push({ id: 't-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...clean });
+    }
+    this.state.titlesCatalog = list;
+    this.saveState(true);
+    return { success: true };
+  }
+
+  /** Remove a title from the shop (students who bought it keep it) */
+  deleteTitle(id) {
+    this.state.titlesCatalog = this.getTitlesCatalog().filter(t => t.id !== id);
+    this.saveState(true);
+  }
+
+  // ---------------- Streak freezes ----------------
+  getStreakFreezes(studentId) {
+    const st = this.getStudentById(studentId);
+    return st ? viewLedger(this.effectiveGameLedger(st)).freezes : 0;
+  }
+
+  /** Teacher / admin gives a free freeze (e.g. the student was ill). id makes repeated gifts idempotent. */
+  grantStreakFreeze(studentId, reason = 'Подарок преподавателя', id = null) {
+    const st = this.getStudentById(studentId);
+    if (!st) return { success: false, message: 'Ученик не найден' };
+    if (this.getStreakFreezes(studentId) >= GAME_RULES.MAX_FREEZES) return { success: false, message: `У ученика уже ${GAME_RULES.MAX_FREEZES} заморозки — больше хранить нельзя` };
+    const recId = id || ('frz-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6));
+    if ((this.state.purchases || []).some(p => p.id === recId)) return { success: false, message: 'Уже выдано' };
+    const group = this.getGroupById(st.groupId);
+    if (!this.state.purchases) this.state.purchases = [];
+    this.state.purchases.unshift({
+      id: recId, studentId, studentName: st.fullName, groupId: st.groupId || null, groupName: group ? group.name : '—',
+      teacherId: (typeof localStorage !== 'undefined' && localStorage.getItem('crm_current_teacher_id')) || 'admin',
+      type: 'streak_freeze', itemId: 'streak_freeze', itemName: '❄️ Заморозка серии', itemIcon: '❄️', price: 0, reason,
+      date: new Date().toISOString(), status: 'completed'
+    });
+    this.saveState(true);
+    return { success: true, message: `❄️ Заморозка серии выдана: ${st.fullName}` };
+  }
+
+  /**
+   * Reward for 1st place in a group's monthly rating: one streak freeze. Runs on staff devices after the month
+   * ends; the record id is fixed per month and group, so several devices never give it twice.
+   */
+  awardMonthlyLeaders() {
+    if (this._leadersAwarded || !this._serverSynced) return;
+    this._leadersAwarded = true;
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const monthKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+    if (monthKey < '2026-10') return; // ratings started in October 2026
+    const monthName = prev.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+    (this.state.groups || []).filter(g => g.status !== 'archived').forEach(g => {
+      const lb = this.getGroupMonthlyLeaderboard(g.id, prev.getFullYear(), prev.getMonth());
+      const top = lb[0];
+      if (!top || top.netMonthlyPoints <= 0) return;
+      if (lb[1] && lb[1].netMonthlyPoints === top.netMonthlyPoints) return; // shared 1st place: no automatic prize
+      const id = `frz-top-${monthKey}-${g.id}`;
+      if ((this.state.purchases || []).some(p => p.id === id)) return;
+      this.grantStreakFreeze(top.studentId, `🏆 1 место в группе «${g.name}» за ${monthName}`, id);
+    });
+  }
+
   makePurchase(studentId, item) {
     const student = this.getStudentById(studentId);
     if (!student) {
       return { success: false, message: 'Ученик не найден в системе' };
     }
 
+    if (item.type === 'streak_freeze') {
+      if (this.getStreakFreezes(studentId) >= GAME_RULES.MAX_FREEZES) {
+        return { success: false, message: `Можно хранить не больше ${GAME_RULES.MAX_FREEZES} заморозок` };
+      }
+      item = { ...item, price: GAME_RULES.FREEZE_PRICE, id: 'streak_freeze', name: '❄️ Заморозка серии', icon: '❄️' };
+    }
     const price = Math.max(0, Number(item.price) || 0);
     const currentBalance = student.totalPoints || 0;
 

@@ -23,6 +23,9 @@ const QUICK = {
   ]
 };
 
+/** All categories of the current mode (computer: one icon button per category) */
+const rowTemplates = () => SCORING_TEMPLATES[ui.mode].filter(t => !t.excludeFromRating);
+
 // mode: 'add' | 'deduct' — which buttons the rows show
 const ui = { mode: 'add', lastAction: null };
 
@@ -55,8 +58,9 @@ export function renderLessonModeHtml(ctx) {
       ? `<button type="button" class="lm-pay paid" data-sid="${st.id}" data-action="unpaid" title="Оплачено за ${esc(currMonth.name)}. Нажмите, чтобы отменить">💳 ✓</button>`
       : `<button type="button" class="lm-pay" data-sid="${st.id}" data-action="paid" title="Не оплачено за ${esc(currMonth.name)}. Нажмите, чтобы отметить оплату">💳 ✗</button>`;
     const actions = (isAbsent
-      ? `<span class="lm-absent-note">отсутствует</span>`
-      : quick.map((q, i) => `<button type="button" class="lm-pt ${ui.mode === 'deduct' ? 'minus' : ''}" data-sid="${st.id}" data-q="${i}" title="${esc(q.label)}">${q.short}</button>`).join(''))
+      ? `<span class="lm-absent-note">отсутствует</span><button type="button" class="lm-pt lm-freeze" data-sid="${st.id}" title="Подарить заморозку серии (например, если заболел). Сейчас: ${store.getStreakFreezes(st.id)}">❄️</button>`
+      : `<span class="lm-quick-mobile">${quick.map((q, i) => `<button type="button" class="lm-pt ${ui.mode === 'deduct' ? 'minus' : ''}" data-sid="${st.id}" data-q="${i}" title="${esc(q.label)}">${q.short}</button>`).join('')}</span>`
+        + `<span class="lm-quick-desk">${rowTemplates().map((t, i) => `<button type="button" class="lm-pt lm-ico ${ui.mode === 'deduct' ? 'minus' : ''}" data-sid="${st.id}" data-t="${i}" title="${esc(t.label)}: ${ui.mode === 'deduct' ? '−' : '+'}${t.points}">${t.icon}${t.points}</button>`).join('')}</span>`)
       + `<button type="button" class="lm-pt lm-more" data-sid="${st.id}" title="Все категории и свои баллы">…</button>`;
     return `
       <div class="lm-row ${isAbsent ? 'is-absent' : ''}" data-sid="${st.id}">
@@ -161,6 +165,20 @@ export function bindLessonMode(root, ctx, { rerender, openStudentModal }) {
     const sid = btn.dataset.sid;
     const sign = type === 'deduct' ? '−' : '+';
     award([{ studentId: sid, teacherId, points: q.points, type, category: q.category, comment: q.label }], `${sign}${q.points} «${q.label}» — ${studentName(sid)}`);
+  }));
+
+  root.querySelectorAll('.lm-pt[data-t]').forEach(btn => btn.addEventListener('click', () => {
+    const type = ui.mode;
+    const t = rowTemplates()[Number(btn.dataset.t)];
+    const sid = btn.dataset.sid;
+    award([{ studentId: sid, teacherId, points: t.points, type, category: t.category, comment: t.label }], `${type === 'deduct' ? '−' : '+'}${t.points} «${t.label}» — ${studentName(sid)}`);
+  }));
+
+  root.querySelectorAll('.lm-freeze').forEach(btn => btn.addEventListener('click', () => {
+    const sid = btn.dataset.sid;
+    if (!window.confirm(`Подарить ❄️ заморозку серии: ${studentName(sid)}?\nПропущенный день не сломает серию мини-игр.`)) return;
+    const res = store.grantStreakFreeze(sid, 'Пропуск урока (подарок преподавателя)');
+    if (res.success) toast.success(res.message); else toast.error(res.message);
   }));
 
   root.querySelectorAll('.lm-more').forEach(btn => btn.addEventListener('click', () => openStudentModal(btn.dataset.sid, ui.mode)));

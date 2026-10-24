@@ -29,7 +29,7 @@ const jeq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const byDateDesc = (field) => (a, b) => String(b?.[field] || b?.createdAt || '').localeCompare(String(a?.[field] || a?.createdAt || ''));
 const SORTERS = {
-  students: byDateDesc('createdAt'),
+  students: (a, b) => String(a?.fullName || '').localeCompare(String(b?.fullName || ''), 'ru'),  // alphabetical everywhere
   pointRecords: byDateDesc('date'),
   purchases: byDateDesc('date'),
   activityLogs: byDateDesc('timestamp'),
