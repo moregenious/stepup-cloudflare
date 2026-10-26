@@ -259,7 +259,7 @@
 /* Stats Metric Cards */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: var(--space-5);
   margin-bottom: var(--space-6);
 }
@@ -928,7 +928,7 @@ dialog.app-modal::backdrop {
 }
 
 /* ===== Attendance section ===== */
-.att-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+.att-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
 .att-stat { background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: 12px; padding: 12px 14px; }
 .att-stat-num { font-size: 1.5rem; font-weight: 800; color: var(--color-text-main); }
 .att-stat-label { font-size: 0.75rem; color: var(--color-text-muted); }
@@ -962,3 +962,37 @@ dialog.app-modal::backdrop {
   .lm-actions { flex-wrap: wrap; justify-content: flex-end; }
 }
 .lm-pt.lm-freeze { border-color: #7dd3fc; background: #f0f9ff; min-width: 36px; }
+
+/* ===== Phone layout safety net: nothing may be wider than the screen ===== */
+/* Grid and flex children are allowed to shrink below the width of their content */
+.students-grid > *, .dashboard-columns > *, .words-options-grid > *,
+.main-content [style*="display: grid"] > *, .main-content [style*="display:grid"] > * { min-width: 0; }
+.student-card, .card { min-width: 0; }
+.btn-word-opt { white-space: normal; min-width: 0; overflow-wrap: anywhere; }
+.student-card-details, .detail-row { overflow-wrap: anywhere; }
+.tense-level-card > div:first-child { flex: 1 1 200px; min-width: 0; }
+.tense-level-card div { flex-wrap: wrap; }
+@media (max-width: 900px) {
+  /* Two-column page layouts become one column on phones and tablets */
+  .dashboard-columns,
+  .main-content [style*="grid-template-columns: 1.5fr 1fr"],
+  .main-content [style*="grid-template-columns: 1.2fr 1fr"],
+  .main-content [style*="grid-template-columns: 2fr 1fr 1fr"],
+  .main-content [style*="grid-template-columns: 140px 1.4fr 1.1fr"] { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 600px) {
+  .words-options-grid { grid-template-columns: 1fr !important; }
+  .main-content img, .main-content video, .main-content table { max-width: 100%; }
+}
+.student-card-header > * { min-width: 0; }
+.student-meta { min-width: 0; overflow-wrap: anywhere; }
+.student-points-badge { flex-shrink: 0; white-space: nowrap; }
+.student-card-header { flex-wrap: wrap; }
+@media (max-width: 600px) {
+  /* Rows of buttons/labels written inline in the views wrap onto a new line instead of pushing the page wider */
+  .main-content [style*="display:flex"], .main-content [style*="display: flex"],
+  dialog [style*="display:flex"], dialog [style*="display: flex"] { flex-wrap: wrap; }
+  .section-header { flex-wrap: wrap; }
+  .section-title-wrap { min-width: 0; }
+  .main-content .badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+}

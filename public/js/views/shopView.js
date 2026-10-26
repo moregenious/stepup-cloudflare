@@ -155,7 +155,7 @@ export const ShopView = {
 
         ${this.subCustomTab === 'avatars' ? `
           <!-- Avatars Grid -->
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--space-3);">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 130px), 1fr)); gap: var(--space-3);">
             ${PRESET_EMOJIS.map(em => {
               const isUnlocked = unlockedAvatars.includes(em);
               const isEquipped = student?.avatarUrl === em;
@@ -180,7 +180,7 @@ export const ShopView = {
           </div>
         ` : this.subCustomTab === 'frames' ? `
           <!-- Frames Grid -->
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-4);">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: var(--space-4);">
             ${AVAILABLE_FRAMES.map(f => {
               const isFree = f.id === 'frame-none';
               const isUnlocked = isFree || unlockedFrames.includes(f.id);
@@ -401,7 +401,7 @@ export const ShopView = {
             <div class="empty-state-desc">Администратор скоро пополнит ассортимент школьных сувениров и мерча.</div>
           </div>
         ` : `
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-5);">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: var(--space-5);">
             ${items.map(item => `
               <div class="card" style="padding: 0; overflow: hidden; border: 1.5px solid var(--color-border); border-radius: var(--radius-xl); display: flex; flex-direction: column; justify-content: space-between; background: var(--color-bg-card); box-shadow: var(--shadow-sm);">
                 <div style="width: 100%; height: 180px; background: #f1f5f9; overflow: hidden; position: relative;">

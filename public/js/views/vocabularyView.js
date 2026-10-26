@@ -158,7 +158,7 @@ export const VocabularyView = {
         ` : ''}
 
         <!-- Metric Stat Cards -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4);">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: var(--space-3); margin-bottom: var(--space-4);">
           <div class="card" style="padding: var(--space-3); border-radius: var(--radius-lg); background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 1px solid #bfdbfe;">
             <div style="font-size: var(--font-size-xs); font-weight: 600; color: #1e40af; text-transform: uppercase;">Всего слов в пуле</div>
             <div style="font-size: 1.75rem; font-weight: 800; color: #1e3a8a; margin-top: 4px;" id="vocab-stat-total-words">${totalWords}</div>
@@ -282,7 +282,7 @@ export const VocabularyView = {
     }
 
     return `
-      <div class="vocab-words-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--space-3);">
+      <div class="vocab-words-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: var(--space-3);">
         ${words.map(w => {
           const tr = w.transcription ? (w.transcription.startsWith('[') ? w.transcription : `[${w.transcription}]`) : '';
           return `

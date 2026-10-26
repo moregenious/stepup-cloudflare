@@ -344,7 +344,7 @@ export function openCustomizationModal(student, onSave = null) {
             price,
             icon,
             value: itemId,
-            text: itemName
+            text: type === 'title' ? itemId : itemName
           });
 
           if (res.success) {

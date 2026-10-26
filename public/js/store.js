@@ -8,6 +8,9 @@ import { SyncEngine } from './sync.js';
 import { trackGameEnd } from './analytics.js';
 import { GAME_RULES, viewLedger, playGame, migrateLedger } from './shared/gameStreak.js';
 
+/** Titles earned in mini-games (never sold) */
+export const SECRET_TITLE_NAMES = ['знаток слов', 'знаток irregular', 'знаток conditional', 'архитектор условий', 'повелитель времён', 'гений времён', 'мастер предложений', 'повелитель предлогов', 'знаток phrasal verbs', 'грамматический детектив', 'спринтер слов', 'легенда мини-игр'];
+
 /** Titles sold in the shop before teachers edit the list (then state.titlesCatalog is used) */
 export const DEFAULT_TITLES = [
   { id: 't-boltun', text: 'Лучший болтун', icon: '🗣️', price: 150 },
@@ -307,9 +310,15 @@ class Store {
     this._gradesNormalized = true;
     let changed = false;
     (this.state.students || []).forEach(s => {
-      if (s.grade === undefined) return;
-      const g = normalizeGrade(s.grade);
-      if (g !== s.grade) { s.grade = g; changed = true; }
+      if (s.grade !== undefined) {
+        const g = normalizeGrade(s.grade);
+        if (g !== s.grade) { s.grade = g; changed = true; }
+      }
+      // Titles bought from the profile window were saved as 'Титул «name»': keep just the name
+      if (Array.isArray(s.unlockedTitles) && s.unlockedTitles.some(t => /^Титул «.+»$/.test(t))) {
+        s.unlockedTitles = [...new Set(s.unlockedTitles.map(t => t.replace(/^Титул «(.+)»$/, '$1')))];
+        changed = true;
+      }
     });
     if (changed) this.saveState();
   }
@@ -4020,7 +4029,7 @@ class Store {
       mistakesStreak: student.gameStats.mistakesStreak || 0,
       synonymsStreak: student.gameStats.synonymsStreak || 0,
       unlockedTenseLevels: student.gameStats.unlockedTenseLevels,
-      unlockedSecretTitles: student.unlockedTitles,
+      unlockedSecretTitles: (student.unlockedTitles || []).filter(t => SECRET_TITLE_NAMES.includes(t)),
       irregularRecentIds: student.gameStats.irregularRecentIds,
       conditionalModesCompleted: student.gameStats.conditionalModesCompleted || []
     };

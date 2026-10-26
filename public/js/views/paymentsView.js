@@ -126,7 +126,7 @@ export const PaymentsView = {
       </div>
 
       <!-- Overview Stats Cards -->
-      <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: var(--space-6);">
+      <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); margin-bottom: var(--space-6);">
         <div class="stat-card">
           <div class="stat-icon" style="background:#e0e7ff; color:#4338ca;">👥</div>
           <div>

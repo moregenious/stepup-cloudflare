@@ -99,7 +99,7 @@ export const GroupsView = {
             ${(isAdmin || isTeacher) ? `<button class="btn btn-primary btn-sm" id="btn-empty-add-group">Создать группу</button>` : ''}
           </div>
         ` : `
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: var(--space-5);">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 350px), 1fr)); gap: var(--space-5);">
             ${groups.map(g => this.renderGroupCard(g, isAdmin || isTeacher)).join('')}
           </div>
         `}
@@ -231,7 +231,7 @@ export const GroupsView = {
           ${(isAdmin || isTeacher) ? `<button class="btn btn-primary btn-sm" id="btn-empty-add-group">Создать группу</button>` : ''}
         </div>
       ` : `
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: var(--space-5);">
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 350px), 1fr)); gap: var(--space-5);">
           ${groups.map(g => this.renderGroupCard(g, isAdmin || isTeacher)).join('')}
         </div>
       `;

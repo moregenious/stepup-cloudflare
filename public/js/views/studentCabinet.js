@@ -582,7 +582,7 @@ export const StudentCabinet = {
       </div>
 
       <!-- Schedule Cards (Responsive 2-column or 1-column on mobile) -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-6); margin-bottom: var(--space-6);">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--space-6); margin-bottom: var(--space-6);">
         <!-- Nearest Lesson -->
         <div class="card" style="border-left: 4px solid var(--color-primary); margin-bottom: 0;">
           <div class="card-header">

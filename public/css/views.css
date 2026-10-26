@@ -42,7 +42,7 @@
 /* Student Cards Grid */
 .students-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: var(--space-5);
 }
 
@@ -988,7 +988,7 @@
 
 .explorer-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
   gap: var(--space-4);
 }
 
@@ -2619,7 +2619,7 @@
 /* Frames Grid */
 .frames-selection-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 130px), 1fr));
   gap: var(--space-3);
 }
 
@@ -3094,7 +3094,7 @@ tr.selected-row {
 
 .shop-items-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
   gap: var(--space-4);
 }
 
@@ -4632,7 +4632,7 @@ tr.selected-row {
 
 .survey-2col-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: var(--space-4);
 }
 

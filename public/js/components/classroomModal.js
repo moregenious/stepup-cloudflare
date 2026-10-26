@@ -128,7 +128,7 @@ export function openClassroomModal(groupId, onRefresh = null) {
           </div>
 
           <!-- Quick Stats Pills Grid -->
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px; margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.15);">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap:10px; margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.15);">
             <div style="background:rgba(255,255,255,0.08); padding:8px 12px; border-radius:var(--radius-md); border:1px solid rgba(255,255,255,0.12);">
               <div style="font-size:0.7rem; color:#c7d2fe; text-transform:uppercase; font-weight:700;">🥇 Лидер месяца (${currMonthName})</div>
               <div style="font-size:0.95rem; font-weight:800; color:#fef08a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${leader ? leader.student.fullName : 'Пока нет начислений'}">

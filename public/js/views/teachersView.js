@@ -30,7 +30,7 @@ export const TeachersView = {
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: var(--space-5);">
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: var(--space-5);">
         ${teachers.map(t => {
           // Find unique students taught by this teacher
           const teacherLessons = schedule.filter(s => s.teacherId === t.id);
