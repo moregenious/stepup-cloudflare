@@ -996,3 +996,5 @@ dialog.app-modal::backdrop {
   .section-title-wrap { min-width: 0; }
   .main-content .badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 }
+.admin-teacher-filter { width: auto; max-width: 220px; font-weight: 700; font-size: 0.8rem; padding: 4px 8px; }
+@media (max-width: 600px) { .admin-teacher-filter { max-width: 120px; font-size: 0.72rem; } }

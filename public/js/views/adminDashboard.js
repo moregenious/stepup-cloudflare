@@ -44,6 +44,30 @@ export const AdminDashboard = {
         </div>
       </div>
 
+      ${(() => {
+        // Summary per teacher (students belong to the teacher of their group)
+        const teachersAll = (store.state.teachers || []).filter(t => t.status !== 'archived');
+        if (teachersAll.length < 2) return '';
+        const mk = store.getCurrentAcademicMonth().key;
+        const allSt = store.getStudents({ allTeachers: true }).filter(s => s.status === 'active');
+        const rowsT = teachersAll.map(t => {
+          const sts = allSt.filter(s => store.studentOwnerId(s) === t.id);
+          const paid = sts.filter(s => (store.getPayment(s.id, mk) || {}).status === 'paid').length;
+          const grps = (store.state.groups || []).filter(g => g.teacherId === t.id && g.status !== 'archived').length;
+          return `<tr><td class="lm-j-name">${t.fullName}</td><td>${grps}</td><td>${sts.length}</td><td>${paid} из ${sts.length}</td><td><button type="button" class="btn btn-xs btn-ghost btn-dash-teacher-filter" data-tid="${t.id}">Показать →</button></td></tr>`;
+        }).join('');
+        const free = allSt.filter(s => !store.studentOwnerId(s)).length;
+        return `
+          <div class="card" style="padding: var(--space-4); margin-bottom: var(--space-5); overflow-x:auto;">
+            <h3 class="card-title" style="margin-bottom:8px;">👥 По преподавателям</h3>
+            <table class="lm-journal-table att-table">
+              <thead><tr><th>Преподаватель</th><th>Групп</th><th>Учеников</th><th>Оплатили</th><th></th></tr></thead>
+              <tbody>${rowsT}</tbody>
+            </table>
+            ${free ? `<div class="text-xs text-muted" style="margin-top:6px;">Не закреплены за преподавателем: ${free} уч. (без группы) — назначьте в карточке ученика.</div>` : ''}
+          </div>`;
+      })()}
+
       <!-- Quick Actions Bar -->
       <div class="quick-actions-bar">
         <div class="quick-action-btn" id="action-quick-add-group">
@@ -296,6 +320,11 @@ export const AdminDashboard = {
       a.click();
       a.remove();
     });
+
+    container.querySelectorAll('.btn-dash-teacher-filter').forEach(btn => btn.addEventListener('click', () => {
+      store.setAdminTeacherFilter(btn.dataset.tid);
+      window.location.hash = '#students';
+    }));
 
     document.getElementById('btn-export-events')?.addEventListener('click', () => {
       const today = new Date();

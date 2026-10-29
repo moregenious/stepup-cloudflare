@@ -589,7 +589,28 @@ export class App {
     }
   }
 
+  /** Admin: choose whose students / groups / lessons the sections show */
+  updateAdminTeacherFilter() {
+    const sel = document.getElementById('admin-teacher-filter');
+    if (!sel) return;
+    if (!auth.isAdmin()) { sel.style.display = 'none'; return; }
+    const teachers = (store.state.teachers || []).filter(t => t.status !== 'archived');
+    const current = store.scopeTeacherId() || 'all';
+    const html = `<option value="all">👥 Все преподаватели</option>` + teachers.map(t => `<option value="${t.id}">👤 ${t.fullName}</option>`).join('');
+    if (sel.dataset.html !== html) { sel.innerHTML = html; sel.dataset.html = html; }
+    sel.value = teachers.some(t => t.id === current) ? current : 'all';
+    sel.style.display = teachers.length > 1 ? '' : 'none';
+    if (!sel._bound) {
+      sel._bound = true;
+      sel.addEventListener('change', () => {
+        store.setAdminTeacherFilter(sel.value);
+        this.renderCurrentView(true);
+      });
+    }
+  }
+
   updateHeaderProfile() {
+    try { this.updateAdminTeacherFilter(); } catch (e) { /* ignore */ }
     if (!auth.isAuthenticated()) return;
 
     const user = auth.getCurrentUser();

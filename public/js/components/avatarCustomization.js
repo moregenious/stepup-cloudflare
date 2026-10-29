@@ -525,7 +525,9 @@ export function openAvatarViewer(studentId) {
   const st = store.getStudentById(studentId);
   if (!st) return;
   document.querySelector('.avatar-viewer')?.remove();
-  const el = document.createElement('div');
+  // A <dialog> opened with showModal() goes to the browser's top layer, so it covers an open
+  // modal (e.g. the group window) — a plain div can't get above it with any z-index.
+  const el = document.createElement('dialog');
   el.className = 'avatar-viewer';
   el.innerHTML = `
     <div class="avatar-viewer-stage" style="width:${Math.round(Math.min(window.innerWidth * 0.7, window.innerHeight * 0.55, 340))}px; height:${Math.round(Math.min(window.innerWidth * 0.7, window.innerHeight * 0.55, 340))}px;">
@@ -534,11 +536,11 @@ export function openAvatarViewer(studentId) {
     <div class="avatar-viewer-name">${st.fullName || ''}</div>
     ${st.studentTitle ? `<div class="avatar-viewer-title"><span class="student-title-badge">${st.studentTitle}</span></div>` : ''}
     <div class="avatar-viewer-hint">Нажмите, чтобы закрыть</div>`;
-  const close = () => { el.remove(); document.removeEventListener('keydown', onKey); };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
-  el.addEventListener('click', close);
-  document.addEventListener('keydown', onKey);
+  // Escape fires 'cancel' only on the topmost dialog, so the window underneath stays open.
+  el.addEventListener('close', () => el.remove());
+  el.addEventListener('click', () => el.close());
   document.body.appendChild(el);
+  el.showModal();
 }
 
 if (typeof document !== 'undefined' && !window.__avatarViewerBound) {

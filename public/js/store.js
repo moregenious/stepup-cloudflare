@@ -290,6 +290,42 @@ class Store {
     } catch (e) { /* ignore */ }
   }
 
+  // ---------------- Students belong to teachers ----------------
+  // A student belongs to the teacher of their group; a student without a group — to the teacher who added them.
+  // Teachers see only their own students / groups / lessons; the admin sees everyone or picks a teacher.
+  // (Interface only: all data stays in the database for reports and analysis.)
+
+  /** Teacher id that limits the lists right now, or null for "everyone" */
+  scopeTeacherId() {
+    const s = readSession();
+    if (!s) return null;
+    if (s.role === 'teacher') return s.uid;
+    if (s.role === 'admin') {
+      try { return localStorage.getItem('stepup_admin_teacher_filter') || null; } catch (e) { return null; }
+    }
+    return null;
+  }
+
+  setAdminTeacherFilter(teacherId) {
+    try {
+      if (teacherId && teacherId !== 'all') localStorage.setItem('stepup_admin_teacher_filter', teacherId);
+      else localStorage.removeItem('stepup_admin_teacher_filter');
+    } catch (e) { /* ignore */ }
+    this.notify();
+  }
+
+  studentOwnerId(student) {
+    if (!student) return null;
+    const group = student.groupId ? (this.state.groups || []).find(g => g.id === student.groupId) : null;
+    return (group && group.teacherId) || student.teacherId || null;
+  }
+
+  isStudentInScope(student, teacherId = this.scopeTeacherId()) {
+    if (!teacherId) return true;
+    const owner = this.studentOwnerId(student);
+    return !owner || owner === teacherId; // students nobody owns yet stay visible to everyone
+  }
+
   isStaffSession() {
     const s = readSession();
     return Boolean(s && (s.role === 'admin' || s.role === 'teacher'));
@@ -837,37 +873,32 @@ class Store {
     const curM = Number(monthNumber);
     const curL = Number(lessonNumber);
 
-    // Search backwards across months and lessons
-    // 1st pass: prioritize conducted lessons with homework
-    // 2nd pass: any preceding lesson with homework
-    for (let pass = 1; pass <= 2; pass++) {
-      for (let m = curM; m >= 1; m--) {
-        const monthData = tbData[m];
-        if (!monthData) continue;
-        const maxL = (m === curM) ? (curL - 1) : 8;
-        for (let l = maxL; l >= 1; l--) {
-          const cand = monthData[l];
-          if (!cand) continue;
-          const candText = (cand.homework?.text || '').trim();
-          if (candText.length > 0) {
-            if (pass === 1 && !cand.isConducted) {
-              continue; // Only take conducted lesson on 1st pass
+    // Search backwards (this month, then previous months) for the NEAREST earlier lesson with homework.
+    // (Earlier versions preferred lessons marked "conducted" for the whole textbook, which could jump back
+    // to a much older lesson, e.g. September lesson 1 instead of October lesson 6.)
+    for (let m = curM; m >= 1; m--) {
+      const monthData = tbData[m];
+      if (!monthData) continue;
+      const maxL = (m === curM) ? (curL - 1) : 8;
+      for (let l = maxL; l >= 1; l--) {
+        const cand = monthData[l];
+        if (!cand) continue;
+        const candText = (cand.homework?.text || '').trim();
+        if (candText.length > 0) {
+          return {
+            text: cand.homework.text,
+            deadline: (currentLesson?.homework?.deadline && currentLesson.homework.deadline !== 'к следующему уроку')
+              ? currentLesson.homework.deadline
+              : (cand.homework.deadline || 'к следующему уроку'),
+            isFromPrevious: true,
+            sourceLesson: {
+              textbookName,
+              monthNumber: m,
+              monthName: MONTH_NAMES.find(mn => mn.num === m)?.name || `Месяц ${m}`,
+              lessonNumber: l,
+              ...cand
             }
-            return {
-              text: cand.homework.text,
-              deadline: (currentLesson?.homework?.deadline && currentLesson.homework.deadline !== 'к следующему уроку')
-                ? currentLesson.homework.deadline
-                : (cand.homework.deadline || 'к следующему уроку'),
-              isFromPrevious: true,
-              sourceLesson: {
-                textbookName,
-                monthNumber: m,
-                monthName: MONTH_NAMES.find(mn => mn.num === m)?.name || `Месяц ${m}`,
-                lessonNumber: l,
-                ...cand
-              }
-            };
-          }
+          };
         }
       }
     }
@@ -1625,6 +1656,8 @@ class Store {
   // --- Groups CRUD ---
   getGroups(filter = {}) {
     let list = [...(this.state.groups || [])];
+    const scopeT = filter.allTeachers ? null : this.scopeTeacherId();
+    if (scopeT) list = list.filter(g => !g.teacherId || g.teacherId === scopeT);
     if (filter.status) {
       list = list.filter(g => g.status === filter.status);
     }
@@ -1761,6 +1794,10 @@ class Store {
   // --- Students CRUD ---
   getStudents(filter = {}) {
     let result = [...this.state.students];
+    if (!filter.allTeachers) {
+      const scopeT = this.scopeTeacherId();
+      if (scopeT) result = result.filter(s => this.isStudentInScope(s, scopeT));
+    }
     if (filter.status) {
       result = result.filter(s => s.status === filter.status);
     }
@@ -1813,6 +1850,8 @@ class Store {
     const newStudent = {
       id,
       groupId: studentData.groupId || null,
+      // who the student belongs to when they have no group (see studentOwnerId)
+      teacherId: studentData.teacherId || (studentData.groupId ? (this.getGroupById(studentData.groupId) || {}).teacherId : null) || this.scopeTeacherId() || null,
       fullName: studentData.fullName.trim(),
       phone: formattedPhone,
       parentName: studentData.parentName?.trim() || '',
@@ -1862,6 +1901,7 @@ class Store {
       const newStudent = {
         id,
         groupId: item.groupId || null,
+        teacherId: item.teacherId || (item.groupId ? (this.getGroupById(item.groupId) || {}).teacherId : null) || this.scopeTeacherId() || null,
         fullName: item.fullName.trim(),
         phone: formattedPhone,
         parentName: item.parentName?.trim() || '',
@@ -2368,6 +2408,16 @@ class Store {
       this.autoCompletePastLessons();
     }
     let result = [...(this.state.schedule || [])];
+
+    const scopeT = filter.allTeachers ? null : this.scopeTeacherId();
+    if (scopeT) {
+      const groupTeacher = new Map((this.state.groups || []).map(g => [g.id, g.teacherId]));
+      result = result.filter(l => {
+        if (l.groupId) return (groupTeacher.get(l.groupId) || l.teacherId || scopeT) === scopeT;
+        if (l.studentId) return this.isStudentInScope(this.getStudentById(l.studentId), scopeT);
+        return !l.teacherId || l.teacherId === scopeT;
+      });
+    }
 
     if (filter.teacherId && filter.teacherId !== 'all') {
       result = result.filter(s => s.teacherId === filter.teacherId);
@@ -3462,7 +3512,7 @@ class Store {
     const group = this.getGroupById(groupId);
     let students = this.getStudentsByGroupId(groupId);
     if (!students || students.length === 0) {
-      students = this.getStudents().filter(s => s.groupId === groupId);
+      students = this.getStudents({ allTeachers: true }).filter(s => s.groupId === groupId);
     }
     if (!students || students.length === 0) {
       return [];
@@ -3544,9 +3594,10 @@ class Store {
       targetMonth = now.getMonth();
     }
 
-    const students = this.getStudents();
+    // School rating: all students of all teachers
+    const students = this.getStudents({ allTeachers: true });
     const allRecords = this.getPointRecords();
-    const groupsMap = new Map((this.getGroups() || []).map(g => [g.id, g.name]));
+    const groupsMap = new Map((this.getGroups({ allTeachers: true }) || []).map(g => [g.id, g.name]));
 
     const leaderboard = students.map(student => {
       const monthlyRecords = allRecords.filter(r => {

@@ -309,6 +309,17 @@ export const StudentsView = {
             </select>
           </div>
 
+          ${auth.isAdmin() ? `
+            <div class="form-group">
+              <label class="form-label">Преподаватель</label>
+              <select name="teacherId" class="form-control">
+                <option value="">— не закреплён —</option>
+                ${(store.state.teachers || []).filter(t => t.status !== 'archived').map(t => `<option value="${t.id}" ${(store.scopeTeacherId() || '') === t.id ? 'selected' : ''}>${t.fullName}</option>`).join('')}
+              </select>
+              <div class="form-hint">Ученик в группе принадлежит преподавателю группы; это поле нужно для учеников без группы.</div>
+            </div>
+          ` : ''}
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Телефон ученика</label>
@@ -429,6 +440,17 @@ export const StudentsView = {
             </select>
           </div>
 
+          ${auth.isAdmin() ? `
+            <div class="form-group">
+              <label class="form-label">Преподаватель</label>
+              <select name="teacherId" class="form-control">
+                <option value="">— не закреплён —</option>
+                ${(store.state.teachers || []).filter(t => t.status !== 'archived').map(t => `<option value="${t.id}" ${(student.teacherId || '') === t.id ? 'selected' : ''}>${t.fullName}</option>`).join('')}
+              </select>
+              <div class="form-hint">Ученик в группе принадлежит преподавателю группы; это поле нужно для учеников без группы.</div>
+            </div>
+          ` : ''}
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Телефон ученика</label>
@@ -501,6 +523,7 @@ export const StudentsView = {
           e.preventDefault();
           const formData = new FormData(e.target);
           const data = Object.fromEntries(formData.entries());
+          if ('teacherId' in data) data.teacherId = data.teacherId || null;
           store.updateStudent(studentId, data);
           modal.close();
           toast.success('Данные ученика обновлены');
