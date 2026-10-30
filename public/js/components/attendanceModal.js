@@ -22,9 +22,9 @@ export function openAttendanceModal(lessonOrId, arg2 = null, arg3 = null, arg4 =
 
   const isGroup = !!lesson.groupId;
   const group = isGroup ? store.getGroupById(lesson.groupId) : null;
-  const students = isGroup 
-    ? store.getStudentsByGroupId(lesson.groupId)
-    : (lesson.studentId ? [store.getStudentById(lesson.studentId)].filter(Boolean) : []);
+  const lessonGroupNames = store.getLessonGroupIds(lesson, store._exceptionFor(lesson, lessonDate))
+    .map(id => store.getGroupById(id).name).join(' + ');
+  const students = store.getLessonStudents(lesson, lessonDate);
 
   if (students.length === 0) {
     toast.warning('В этой группе нет зарегистрированных учеников.');
@@ -105,7 +105,7 @@ export function openAttendanceModal(lessonOrId, arg2 = null, arg3 = null, arg4 =
         <div style="display:flex; align-items:center; gap:8px; font-size:var(--font-size-sm); color:var(--color-primary); font-weight:700;">
           <span>📅 ${lesson.dayOfWeek || ''} ${lessonDate.split('-').reverse().join('.')} • ⏰ ${lesson.time || ''}</span>
           <span>•</span>
-          <span>👥 ${group ? group.name : 'Индивидуально'}</span>
+          <span>👥 ${group ? lessonGroupNames : 'Индивидуально'}</span>
         </div>
         <div style="font-size:var(--font-size-md); font-weight:800; color:var(--color-text-main); margin-top:4px;">
           ${lesson.topic || 'Занятие по расписанию'}

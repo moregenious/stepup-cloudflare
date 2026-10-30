@@ -334,10 +334,40 @@ class Store {
   runStaffAutomation() {
     if (!this.isStaffSession() || this._automationRunning) return;
     this._automationRunning = true;
+    try { this.removeGeneratedYearlyLessons(); } catch (e) { /* ignore */ }
     try { this.autoCompletePastLessons(); } catch (e) { /* ignore */ }
     try { this.normalizeAllGrades(); } catch (e) { /* ignore */ }
     try { this.awardMonthlyLeaders(); } catch (e) { /* ignore */ }
     this._automationRunning = false;
+  }
+
+  /**
+   * One-time cleanup: creating a group used to add 80 one-off 'sch-' lessons on Mon/Thu 16:00
+   * (dates from 07.09), which nobody chose and which could only be deleted one by one.
+   * Real schedules are weekly 'rec-' lessons, so every generated lesson is removed.
+   */
+  removeGeneratedYearlyLessons() {
+    if (this._generatedLessonsRemoved || !this._serverSynced) return;
+    this._generatedLessonsRemoved = true;
+    const isGenerated = (l) => l && !l.isRecurring && String(l.id || '').startsWith('sch-') && l.monthNumber;
+    const generated = (this.state.schedule || []).filter(isGenerated);
+    if (!generated.length) return;
+
+    this.state.schedule = this.state.schedule.filter(l => !isGenerated(l));
+    const groupIds = new Set(generated.map(l => l.groupId));
+    (this.state.groups || []).forEach(g => {
+      // The generator also wrote its defaults into the group card; drop them, keep anything set by hand
+      if (groupIds.has(g.id) && g.scheduleDays === 'пн-чт' && g.scheduleTime === '16:00 - 17:00') {
+        delete g.scheduleDays;
+        delete g.scheduleTime;
+      }
+    });
+    this.logActivity({
+      type: 'lesson',
+      title: 'Очищено автосозданное расписание',
+      details: `Удалено ${generated.length} уроков, созданных автоматически вместе с группами (Пн/Чт 16:00)`
+    });
+    this.saveState(true);
   }
 
   /** One-time cleanup of the free-text class field: keep only the number (letters removed) */
@@ -1710,15 +1740,7 @@ class Store {
     };
     if (!this.state.groups) this.state.groups = [];
     this.state.groups.push(newGroup);
-
-    // Automatically generate full 80-lesson yearly schedule for this group based on its textbook
-    if (textbookName) {
-      this.generateYearlyScheduleForGroup({
-        groupId: newGroup.id,
-        time: groupData.scheduleTime || '16:00 - 17:00',
-        format: newGroup.classroom || 'Кабинет 1'
-      });
-    }
+    // No lessons are created here: the group's days and times are set in the schedule section.
 
     this.saveState();
     return newGroup;
@@ -2164,6 +2186,8 @@ class Store {
    */
   autoCompletePastLessons(now = new Date()) {
     if (!this._serverSynced) return 0;
+    // Generated lessons must go before they could be auto-completed (each one moves the textbook on)
+    if (this.isStaffSession()) this.removeGeneratedYearlyLessons();
     if (this.isVacation()) return 0;
     if (!this.state || !Array.isArray(this.state.schedule)) return 0;
     let updatedCount = 0;
@@ -2403,6 +2427,16 @@ class Store {
     });
   }
 
+  /**
+   * Groups taught in one lesson: the main group plus groups joined to it
+   * (e.g. two Wednesday groups that come together on Saturday). Only groups that still exist.
+   */
+  getLessonGroupIds(lesson, exc = null) {
+    if (!lesson || !lesson.groupId) return [];
+    const linked = (exc && Array.isArray(exc.linkedGroupIds)) ? exc.linkedGroupIds : (lesson.linkedGroupIds || []);
+    return [...new Set([lesson.groupId, ...linked])].filter(id => this.getGroupById(id));
+  }
+
   getSchedule(filter = {}) {
     if (this._serverSynced) {
       this.autoCompletePastLessons();
@@ -2413,7 +2447,8 @@ class Store {
     if (scopeT) {
       const groupTeacher = new Map((this.state.groups || []).map(g => [g.id, g.teacherId]));
       result = result.filter(l => {
-        if (l.groupId) return (groupTeacher.get(l.groupId) || l.teacherId || scopeT) === scopeT;
+        if (l.groupId) return (groupTeacher.get(l.groupId) || l.teacherId || scopeT) === scopeT
+          || (l.linkedGroupIds || []).some(id => groupTeacher.get(id) === scopeT);
         if (l.studentId) return this.isStudentInScope(this.getStudentById(l.studentId), scopeT);
         return !l.teacherId || l.teacherId === scopeT;
       });
@@ -2423,8 +2458,10 @@ class Store {
       result = result.filter(s => s.teacherId === filter.teacherId);
     }
 
+    const hasGroup = (s, gid) => s.groupId === gid || (s.linkedGroupIds || []).includes(gid);
+
     if (filter.groupId && filter.groupId !== 'all') {
-      result = result.filter(s => s.groupId === filter.groupId);
+      result = result.filter(s => hasGroup(s, filter.groupId));
     }
 
     if (filter.studentId) {
@@ -2432,7 +2469,7 @@ class Store {
       const studentGroupId = student ? student.groupId : null;
       result = result.filter(s =>
         s.studentId === filter.studentId ||
-        (studentGroupId && s.groupId === studentGroupId)
+        (studentGroupId && hasGroup(s, studentGroupId))
       );
     }
 
@@ -2497,11 +2534,18 @@ class Store {
         const duration = Number(exc?.duration || l.duration || 60);
         const group = l.groupId ? this.getGroupById(l.groupId) : null;
         const teacher = l.teacherId ? this.getTeacherById(l.teacherId) : null;
+        const lessonGroupIds = this.getLessonGroupIds(l, exc);
+        // With a group filter, a joined lesson shows only on the days it includes that group
+        if (filter.groupId && filter.groupId !== 'all' && l.groupId !== filter.groupId && !lessonGroupIds.includes(filter.groupId)) return;
+        const joinedName = lessonGroupIds.length > 1
+          ? lessonGroupIds.map(id => this.getGroupById(id).name).join(' + ')
+          : null;
 
         resolvedLessons.push({
           ...l,
           id: l.id,
           baseId: l.id,
+          linkedGroupIds: lessonGroupIds.slice(1),
           date: targetDay.dateStr,
           dateFormatted: targetDay.shortStr,
           dayIndex: targetDay.dayIndex,
@@ -2516,7 +2560,8 @@ class Store {
           isVacationPaused: isVacation,
           group,
           teacher,
-          groupName: group ? group.name : (l.topic || 'Группа'),
+          groupName: joinedName || (group ? group.name : (l.topic || 'Группа')),
+          isJoined: !!joinedName,
           color: l.color || this.pickColorForGroup(l.groupId),
           isRecurringInstance: true
         });
@@ -2527,10 +2572,16 @@ class Store {
         const status = l.status || 'planned';
         const group = l.groupId ? this.getGroupById(l.groupId) : null;
         const teacher = l.teacherId ? this.getTeacherById(l.teacherId) : null;
+        const lessonGroupIds = this.getLessonGroupIds(l);
+        const joinedName = lessonGroupIds.length > 1
+          ? lessonGroupIds.map(id => this.getGroupById(id).name).join(' + ')
+          : null;
 
         resolvedLessons.push({
           ...l,
           baseId: l.id,
+          linkedGroupIds: lessonGroupIds.slice(1),
+          isJoined: !!joinedName,
           date: targetDay.dateStr,
           dateFormatted: targetDay.shortStr,
           dayIndex: targetDay.dayIndex,
@@ -2542,7 +2593,7 @@ class Store {
           isVacationPaused: isVacation,
           group,
           teacher,
-          groupName: group ? group.name : (l.topic || 'Урок'),
+          groupName: joinedName || (group ? group.name : (l.topic || 'Урок')),
           color: l.color || this.pickColorForGroup(l.groupId),
           isRecurringInstance: false
         });
@@ -2608,6 +2659,7 @@ class Store {
       format: lessonData.format || (group?.classroom || 'Очно (Кабинет 1)'),
       isRecurring,
       color: lessonData.color || this.pickColorForGroup(lessonData.groupId),
+      linkedGroupIds: isGroup ? (lessonData.linkedGroupIds || []).filter(id => id && id !== lessonData.groupId) : [],
       exceptions: {}
     };
 
@@ -2836,6 +2888,12 @@ class Store {
   }
 
   _handleLessonCompletion(lesson, dateStr) {
+    // A joined lesson moves every group in it to its next textbook lesson
+    const lessonGroupIds = this.getLessonGroupIds(lesson, this._exceptionFor(lesson, dateStr));
+    if (lessonGroupIds.length > 1) {
+      lessonGroupIds.forEach(gid => this._handleLessonCompletion({ ...lesson, groupId: gid, linkedGroupIds: [], exceptions: {} }, dateStr));
+      return;
+    }
     const group = lesson.groupId ? this.getGroupById(lesson.groupId) : null;
     const student = lesson.studentId ? this.getStudentById(lesson.studentId) : null;
     const tbName = group?.textbook || student?.textbook;
@@ -2876,7 +2934,17 @@ class Store {
     }
   }
 
+  _exceptionFor(lesson, dateStr) {
+    if (!lesson || !lesson.isRecurring || !lesson.exceptions || !dateStr) return null;
+    return lesson.exceptions[dateStr] || null;
+  }
+
   _rollbackLessonCompletion(lesson, dateStr) {
+    const lessonGroupIds = this.getLessonGroupIds(lesson, this._exceptionFor(lesson, dateStr));
+    if (lessonGroupIds.length > 1) {
+      lessonGroupIds.forEach(gid => this._rollbackLessonCompletion({ ...lesson, groupId: gid, linkedGroupIds: [], exceptions: {} }, dateStr));
+      return;
+    }
     const group = lesson.groupId ? this.getGroupById(lesson.groupId) : null;
     if (!group || !Array.isArray(group.conductedLessons) || group.conductedLessons.length === 0) return;
     try {
@@ -3213,15 +3281,7 @@ class Store {
     const group = this.getGroupById(groupId);
     if (!group) return [];
 
-    let groupLessons = this.getSchedule({ groupId });
-    if (!groupLessons.length) {
-      // Auto-populate 80 lessons if group is newly created
-      groupLessons = this.generateYearlyScheduleForGroup({
-        groupId,
-        time: group.scheduleTime || '16:00 - 17:00',
-        format: group.classroom || 'Кабинет 2'
-      }) || [];
-    }
+    const groupLessons = this.getSchedule({ groupId });
 
     const textbookName = group.textbook || (this.getTextbooks()[0] || 'English world 1');
 
@@ -3817,9 +3877,25 @@ class Store {
     return (this.state.attendance || {})[this.attendanceKey(lesson, date)] || null;
   }
 
+  /** Students of every group in the lesson (joined lessons have several groups) */
+  getLessonStudents(lesson, date = null) {
+    if (!lesson) return [];
+    if (!lesson.groupId) return lesson.studentId ? [this.getStudentById(lesson.studentId)].filter(Boolean) : [];
+    const day = this.lessonDateFor(lesson, date);
+    return this.getLessonGroupIds(lesson, this._exceptionFor(lesson, day)).flatMap(gid => this.getStudentsByGroupId(gid));
+  }
+
   getLessonAttendance(lessonId, date = null) {
     const lesson = this.getLessonById(lessonId);
     if (!lesson) return {};
+    const day = this.lessonDateFor(lesson, date);
+    const groupIds = this.getLessonGroupIds(lesson, this._exceptionFor(lesson, day));
+    if (groupIds.length > 1) {
+      // A joined lesson keeps one record per group, so each group's attendance stays its own
+      const marks = {};
+      groupIds.forEach(gid => Object.assign(marks, this.state.attendance?.[`${gid}_${day}`]?.marks || {}));
+      return marks;
+    }
     const rec = this.getAttendanceRecord(lesson, date);
     if (rec) return { ...rec.marks };
     // Older one-off lessons kept marks on the lesson itself
@@ -3831,6 +3907,24 @@ class Store {
     if (!lesson) return null;
     const day = this.lessonDateFor(lesson, date);
     if (!this.state.attendance) this.state.attendance = {};
+    const groupIds = this.getLessonGroupIds(lesson, this._exceptionFor(lesson, day));
+    if (groupIds.length > 1) {
+      const byGroup = {};
+      Object.entries(attendanceMap).forEach(([sid, st]) => {
+        const gid = this.getStudentById(sid)?.groupId;
+        const target = groupIds.includes(gid) ? gid : lesson.groupId;
+        (byGroup[target] = byGroup[target] || {})[sid] = st;
+      });
+      Object.entries(byGroup).forEach(([gid, marks]) => this._writeAttendance({ ...lesson, groupId: gid }, day, marks));
+      this.saveState(true);
+      return this.getLessonAttendance(lessonId, day);
+    }
+    this._writeAttendance(lesson, day, attendanceMap);
+    this.saveState(true);
+    return this.state.attendance[this.attendanceKey(lesson, day)].marks;
+  }
+
+  _writeAttendance(lesson, day, attendanceMap) {
     const key = this.attendanceKey(lesson, day);
     const prev = this.state.attendance[key];
     this.state.attendance[key] = {
@@ -3842,8 +3936,6 @@ class Store {
       marks: { ...(prev ? prev.marks : {}), ...attendanceMap },
       updatedAt: new Date().toISOString()
     };
-    this.saveState(true);
-    return this.state.attendance[key].marks;
   }
 
   /** Mark one student; status 'present' | 'absent' */

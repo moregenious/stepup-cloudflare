@@ -3848,6 +3848,24 @@ tr.selected-row {
   margin-bottom: 22px;
 }
 
+.lesson-join-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+}
+.lesson-join-box summary { cursor: pointer; font-weight: 700; font-size: 0.88rem; color: #1e293b; }
+.lesson-join-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow-y: auto; }
+.lesson-join-chip {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0;
+  padding: 5px 10px; border: 1px solid #cbd5e1; border-radius: 999px;
+  font-size: 0.8rem; font-weight: 600; color: #334155; cursor: pointer; max-width: 100%;
+}
+.lesson-join-chip span { overflow-wrap: anywhere; }
+.lesson-join-chip input { width: 15px; height: 15px; accent-color: #0284c7; flex-shrink: 0; }
+.lesson-join-chip:has(input:checked) { background: #e0f2fe; border-color: #7dd3fc; color: #0369a1; }
+
 .lesson-modal-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

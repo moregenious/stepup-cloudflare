@@ -545,7 +545,7 @@ export const GroupsView = {
           });
 
           modal.close();
-          toast.success(`Группа "${newGroup.name}" создана с программой учебника "${newGroup.textbook}"!`);
+          toast.success(`Группа "${newGroup.name}" создана. Дни и время уроков назначьте в разделе «Расписание».`);
           this.render(container);
         });
       }

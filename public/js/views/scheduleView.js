@@ -457,6 +457,12 @@ export const ScheduleView = {
     const isEditing = !!lesson;
     const currentGroupId = lesson ? lesson.groupId : (groups[0]?.id || '');
     const currentGroup = groups.find(g => g.id === currentGroupId) || groups[0] || null;
+    const currentLinkedIds = lesson?.linkedGroupIds || [];
+    const renderJoinOptions = (mainId, checkedIds = currentLinkedIds) => groups.filter(g => g.id !== mainId).map(g => `
+      <label class="lesson-join-chip">
+        <input type="checkbox" class="modal-lesson-join-chk" value="${g.id}" ${checkedIds.includes(g.id) ? 'checked' : ''}>
+        <span>${g.name}</span>
+      </label>`).join('');
 
     const monday = this.getMondayDate();
     const monthsRuShort = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
@@ -553,6 +559,15 @@ export const ScheduleView = {
             </select>
           </div>
         </div>
+
+        <!-- Joined groups: several groups taught together in this lesson -->
+        ${groups.length > 1 ? `
+          <details class="lesson-join-box" ${currentLinkedIds.length ? 'open' : ''}>
+            <summary>🔗 Объединить с другой группой${currentLinkedIds.length ? ` (${currentLinkedIds.length})` : ''}</summary>
+            <div class="text-xs text-muted" style="margin:6px 0 8px;">Отмеченные группы придут на этот урок вместе с основной: общая посещаемость, урок засчитается каждой группе.</div>
+            <div class="lesson-join-list" id="modal-lesson-join-list">${renderJoinOptions(currentGroupId)}</div>
+          </details>
+        ` : ''}
 
         <!-- Duration Select (Matches Screenshot 2) -->
         <div class="lesson-duration-select-wrap">
@@ -743,7 +758,13 @@ export const ScheduleView = {
       if (g) {
         avatarBadge.textContent = g.name.split(' ').map(n => n[0]).slice(0, 2).join('');
       }
+      const joinList = modalDialog.querySelector('#modal-lesson-join-list');
+      if (joinList) joinList.innerHTML = renderJoinOptions(groupSelect.value, getLinkedGroupIds());
     });
+
+    const getLinkedGroupIds = () => [...modalDialog.querySelectorAll('.modal-lesson-join-chk:checked')]
+      .map(chk => chk.value)
+      .filter(id => id !== groupSelect.value);
 
     hourSelect?.addEventListener('change', updateTimePreview);
     minSelect?.addEventListener('change', updateTimePreview);
@@ -833,7 +854,8 @@ export const ScheduleView = {
           isRecurring: recurrenceChk.checked,
           topic: grp ? `Урок группы ${grp.name}` : 'English Lesson',
           format: grp?.classroom || 'Очно (Кабинет 1)',
-          color: grp ? store.pickColorForGroup(gId) : '#bbf7d0'
+          color: grp ? store.pickColorForGroup(gId) : '#bbf7d0',
+          linkedGroupIds: getLinkedGroupIds()
         });
         modal.close();
         toast.success('✓ Урок создан и отмечен как проведенный!');
@@ -885,7 +907,8 @@ export const ScheduleView = {
         isRecurring: isRecChecked,
         topic: grp ? `Урок группы ${grp.name}` : 'English Lesson',
         format: grp?.classroom || 'Очно (Кабинет 1)',
-        color
+        color,
+        linkedGroupIds: getLinkedGroupIds()
       };
 
       if (!isEditing) {

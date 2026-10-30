@@ -126,12 +126,19 @@ export class App {
         this.updateHeaderProfile();
 
         const currentHash = this.currentHash || window.location.hash || '';
+        // The first screen may be drawn from the browser cache (old or partial data); when the
+        // server data arrives, redraw it once even on routes that normally skip background redraws.
+        if (!store._serverSynced) this._renderedWithServerData = false;
+        const firstServerData = store._serverSynced && !this._renderedWithServerData;
         const isInteractiveRoute = NO_BACKGROUND_RELOAD_ROUTES.has(currentHash);
         const hasFocusedInput = document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
         const isModalOpen = modal.isOpen || Boolean(document.querySelector('.modal-backdrop.open, #modal-backdrop.open'));
 
-        // Prevent destructive DOM rebuilds during scrolling, touch momentum, reading, or active forms
-        if (!isInteractiveRoute && !isUserScrolling && !isUserInteracting && !hasFocusedInput && !isModalOpen) {
+        if (firstServerData && !hasFocusedInput && !isModalOpen) {
+          this._renderedWithServerData = true;
+          this.renderCurrentView(false);
+        } else if (!isInteractiveRoute && !isUserScrolling && !isUserInteracting && !hasFocusedInput && !isModalOpen) {
+          // Prevent destructive DOM rebuilds during scrolling, touch momentum, reading, or active forms
           this.renderCurrentView(false);
         }
       }

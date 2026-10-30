@@ -16,3 +16,4 @@ import.sql
 .env.*
 !.dev.vars.example
 .claude/launch.json
+CLAUDE.md
