@@ -14,7 +14,17 @@ export const AVAILABLE_FRAMES = [
   { id: 'frame-gold', name: 'Королевская корона', icon: '👑', desc: 'Золото и корона' },
   { id: 'frame-cosmic', name: 'Космос и туманность', icon: '🌌', desc: 'Галактический перелив' },
   { id: 'frame-cyber', name: 'Киберпанк 2077', icon: '⚡', desc: 'Матричный контур' },
-  { id: 'frame-rainbow', name: 'Радужный вихрь', icon: '🌈', desc: 'Спектральный перелив' }
+  { id: 'frame-rainbow', name: 'Радужный вихрь', icon: '🌈', desc: 'Спектральный перелив' },
+  { id: 'frame-aurora', name: 'Северное сияние', icon: '🌌', desc: 'Кольцо переливается бирюзой и фиолетом' },
+  { id: 'frame-ocean', name: 'Океанская волна', icon: '🌊', desc: 'Волны расходятся кругами' },
+  { id: 'frame-lightning', name: 'Грозовой разряд', icon: '🌩️', desc: 'Внезапные вспышки молний' },
+  { id: 'frame-sakura', name: 'Сакура', icon: '🌸', desc: 'Падают лепестки вишни' },
+  { id: 'frame-ice', name: 'Ледяной кристалл', icon: '❄️', desc: 'По льду пробегает блик' },
+  { id: 'frame-lava', name: 'Лава', icon: '🌋', desc: 'Кипящее огненное кольцо' },
+  { id: 'frame-orbit', name: 'Орбита', icon: '🪐', desc: 'Вокруг летает планета' },
+  { id: 'frame-diamond', name: 'Бриллиант', icon: '💎', desc: 'Сверкающие грани' },
+  { id: 'frame-hearts', name: 'Сердечки', icon: '💖', desc: 'Стучит сердце, летят сердечки' },
+  { id: 'frame-pixel', name: 'Пиксель-арт', icon: '👾', desc: 'Ретро-игра в 8 бит' }
 ];
 
 /** Kept for compatibility; the live list is store.getTitlesCatalog() (teachers can edit it) */
@@ -90,6 +100,20 @@ export function renderStudentAvatarHtml(student, options = {}) {
     decoHtml = `<span class="frame-deco-crown">👑</span>`;
   } else if (frame === 'frame-cyber') {
     decoHtml = `<span class="frame-deco-bolt">⚡</span>`;
+  } else if (frame === 'frame-lightning') {
+    decoHtml = `<span class="frame-deco-zap zap-1">⚡</span><span class="frame-deco-zap zap-2">⚡</span>`;
+  } else if (frame === 'frame-sakura') {
+    decoHtml = `<span class="frame-deco-petal petal-1">🌸</span><span class="frame-deco-petal petal-2">🌸</span><span class="frame-deco-petal petal-3">🌸</span>`;
+  } else if (frame === 'frame-ice') {
+    decoHtml = `<span class="frame-deco-snow">❄️</span>`;
+  } else if (frame === 'frame-orbit') {
+    decoHtml = `<span class="frame-deco-orbit"><span class="orbit-planet">🪐</span><span class="orbit-star">✦</span></span>`;
+  } else if (frame === 'frame-diamond') {
+    decoHtml = `<span class="frame-deco-glint glint-1">✦</span><span class="frame-deco-glint glint-2">✦</span><span class="frame-deco-glint glint-3">✦</span>`;
+  } else if (frame === 'frame-hearts') {
+    decoHtml = `<span class="frame-deco-heart heart-1">💗</span><span class="frame-deco-heart heart-2">💖</span><span class="frame-deco-heart heart-3">💕</span>`;
+  } else if (frame === 'frame-pixel') {
+    decoHtml = `<span class="frame-deco-invader">👾</span>`;
   }
 
   const titleAttr = `${fullName}${student?.studentTitle ? ` • ${student.studentTitle}` : ''}`;
@@ -102,6 +126,58 @@ export function renderStudentAvatarHtml(student, options = {}) {
       </div>
     </div>
   `;
+}
+
+/**
+ * Preview before buying: the item on the student's own avatar (frames are animated), price and balance.
+ * item: { type: 'frame' | 'avatar' | 'title', id, name, price, icon, desc }.
+ * onBuy(equipNow) runs when the student confirms. A <dialog> in the top layer, so it also opens over the profile window.
+ */
+export function openPurchasePreview(student, item, onBuy) {
+  if (!student || !item) return;
+  const frameInfo = item.type === 'frame' ? AVAILABLE_FRAMES.find(f => f.id === item.id) : null;
+  const preview = { ...student };
+  if (item.type === 'frame') preview.avatarFrame = item.id;
+  if (item.type === 'avatar') preview.avatarUrl = item.id;
+  if (item.type === 'title') preview.studentTitle = `${item.icon || ''} ${item.name}`.trim();
+  const price = Number(item.price) || 0;
+  const balance = Number(student.totalPoints) || 0;
+  const enough = balance >= price;
+  const typeWord = { frame: 'Рамка', avatar: 'Аватар', title: 'Титул' }[item.type] || 'Предмет';
+
+  document.querySelector('.purchase-preview')?.remove();
+  const el = document.createElement('dialog');
+  el.className = 'purchase-preview';
+  el.innerHTML = `
+    <div class="purchase-preview-stage">
+      ${renderStudentAvatarHtml(preview, { size: 'preview', zoom: false })}
+      <div class="purchase-preview-name">${typeWord}: ${item.name}</div>
+      ${preview.studentTitle ? `<div class="purchase-preview-title">${preview.studentTitle}</div>` : ''}
+      ${(item.desc || frameInfo?.desc) ? `<div class="purchase-preview-desc">${item.desc || frameInfo.desc}</div>` : ''}
+    </div>
+    <div class="purchase-preview-body">
+      <div class="purchase-preview-price"><span>Цена</span><strong>${price} ⭐</strong></div>
+      <div class="purchase-preview-price"><span>Твой баланс</span><strong style="color:${enough ? 'var(--color-success, #16a34a)' : 'var(--color-danger, #dc2626)'};">${balance} ⭐</strong></div>
+      ${enough ? `
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; margin:0; cursor:pointer;">
+          <input type="checkbox" class="purchase-preview-equip" checked style="width:16px; height:16px;"> Сразу надеть после покупки
+        </label>
+      ` : `<div style="font-size:0.85rem; color:var(--color-danger, #dc2626); font-weight:700;">Не хватает ${price - balance} ⭐ — заработай баллы на уроках и в мини-играх!</div>`}
+      <div class="purchase-preview-actions">
+        <button type="button" class="btn btn-secondary purchase-preview-cancel">Отмена</button>
+        <button type="button" class="btn btn-primary purchase-preview-buy" ${enough ? '' : 'disabled'}>Купить за ${price} ⭐</button>
+      </div>
+    </div>`;
+  el.addEventListener('close', () => el.remove());
+  el.addEventListener('click', (e) => { if (e.target === el) el.close(); });
+  el.querySelector('.purchase-preview-cancel').addEventListener('click', () => el.close());
+  el.querySelector('.purchase-preview-buy').addEventListener('click', () => {
+    const equipNow = Boolean(el.querySelector('.purchase-preview-equip')?.checked);
+    el.close();
+    onBuy(equipNow);
+  });
+  document.body.appendChild(el);
+  el.showModal();
 }
 
 /**
@@ -330,13 +406,8 @@ export function openCustomizationModal(student, onSave = null) {
       }
 
       const promptBuyItem = (type, itemId, itemName, price, icon) => {
-        const currentBal = student.totalPoints || 0;
-        if (currentBal < price) {
-          toast.error(`Недостаточно баллов! Стоимость: ${price} ⭐. На вашем балансе: ${currentBal} ⭐. Зарабатывайте баллы на уроках и в мини-играх!`);
-          return;
-        }
-
-        if (confirm(`Приобрести «${itemName}» за ${price} ⭐?\nВаш баланс: ${currentBal} ⭐. После покупки предмет станет навсегда открыт в профиле!`)) {
+        // The student sees the item on their own avatar before buying
+        openPurchasePreview({ ...student, ...draft }, { type, id: itemId, name: itemName, price, icon }, (equipNow) => {
           const res = store.makePurchase(student.id, {
             type,
             id: itemId,
@@ -349,6 +420,10 @@ export function openCustomizationModal(student, onSave = null) {
 
           if (res.success) {
             toast.success(res.message);
+            if (equipNow) {
+              const equip = type === 'frame' ? { avatarFrame: itemId } : type === 'avatar' ? { avatarUrl: itemId } : { studentTitle: `${icon} ${itemName}` };
+              store.updateStudentCustomization(student.id, equip);
+            }
             // Re-open with freshly updated student data
             const freshStudent = store.getStudentById(student.id);
             modal.close();
@@ -357,7 +432,7 @@ export function openCustomizationModal(student, onSave = null) {
           } else {
             toast.error(res.message);
           }
-        }
+        });
       };
 
       // Helper to compress avatar images locally to max 256x256 WebP/JPEG (<30 KB)

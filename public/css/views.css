@@ -2560,6 +2560,181 @@
   to { transform: rotate(-360deg); }
 }
 
+/* ---- Animated frames, set 2 (November 2026). Sizes in em so they scale with the avatar ---- */
+/* Rings drawn by ::before under the avatar core (z-index 2), so the photo/emoji never rotates */
+.custom-avatar-wrapper.frame-aurora::before,
+.custom-avatar-wrapper.frame-ice::before,
+.custom-avatar-wrapper.frame-lava::before,
+.custom-avatar-wrapper.frame-diamond::before,
+.custom-avatar-wrapper.frame-pixel::before {
+  content: ''; position: absolute; inset: calc(-1 * max(3px, 0.09em)); border-radius: 50%; z-index: 0; pointer-events: none;
+  animation: frame-spin 5s linear infinite;
+}
+
+/* 1. Северное сияние */
+.custom-avatar-wrapper.frame-aurora::before { background: conic-gradient(#22d3ee, #4ade80, #a855f7, #22d3ee); }
+.custom-avatar-wrapper.frame-aurora { animation: aurora-glow 3s ease-in-out infinite alternate; }
+@keyframes aurora-glow {
+  from { box-shadow: 0 0 12px rgba(34, 211, 238, 0.7); }
+  to { box-shadow: 0 0 22px rgba(168, 85, 247, 0.85), 0 0 34px rgba(74, 222, 128, 0.45); }
+}
+
+/* 2. Океанская волна: two rings ripple outwards */
+.custom-avatar-wrapper.frame-ocean { border: 3px solid #0ea5e9; box-shadow: 0 0 14px rgba(14, 165, 233, 0.7); }
+.custom-avatar-wrapper.frame-ocean::before,
+.custom-avatar-wrapper.frame-ocean::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid rgba(56, 189, 248, 0.8);
+  pointer-events: none; animation: ocean-ripple 2.4s ease-out infinite;
+}
+.custom-avatar-wrapper.frame-ocean::after { animation-delay: 1.2s; }
+@keyframes ocean-ripple {
+  from { transform: scale(1); opacity: 0.9; }
+  to { transform: scale(1.45); opacity: 0; }
+}
+
+/* 3. Грозовой разряд: calm glow with sudden lightning flashes */
+.custom-avatar-wrapper.frame-lightning { border: 3px solid #60a5fa; animation: storm-flash 2.8s linear infinite; }
+.custom-avatar-wrapper.frame-lightning .frame-deco-zap {
+  position: absolute; z-index: 4; font-size: 0.7em; pointer-events: none; opacity: 0.2;
+  filter: drop-shadow(0 0 6px #93c5fd); animation: zap-flash 2.8s linear infinite;
+}
+.custom-avatar-wrapper.frame-lightning .zap-1 { top: -0.35em; right: -0.15em; }
+.custom-avatar-wrapper.frame-lightning .zap-2 { bottom: -0.3em; left: -0.2em; animation-delay: 0.15s; }
+@keyframes storm-flash {
+  0%, 55%, 70%, 100% { box-shadow: 0 0 10px rgba(96, 165, 250, 0.6); border-color: #60a5fa; }
+  58%, 64% { box-shadow: 0 0 28px #ffffff, 0 0 44px #60a5fa; border-color: #ffffff; }
+  61%, 67% { box-shadow: 0 0 12px rgba(96, 165, 250, 0.7); border-color: #93c5fd; }
+}
+@keyframes zap-flash {
+  0%, 55%, 70%, 100% { opacity: 0.25; transform: scale(0.9); }
+  58%, 64% { opacity: 1; transform: scale(1.25); }
+}
+
+/* 4. Сакура: falling petals */
+.custom-avatar-wrapper.frame-sakura { border: 3px solid #f9a8d4; box-shadow: 0 0 14px rgba(244, 114, 182, 0.6); }
+.custom-avatar-wrapper.frame-sakura .frame-deco-petal {
+  position: absolute; top: -0.3em; z-index: 4; font-size: 0.45em; pointer-events: none;
+  animation: petal-fall 3.6s ease-in infinite;
+}
+.custom-avatar-wrapper.frame-sakura .petal-1 { left: 5%; }
+.custom-avatar-wrapper.frame-sakura .petal-2 { left: 55%; animation-delay: 1.2s; }
+.custom-avatar-wrapper.frame-sakura .petal-3 { left: 85%; animation-delay: 2.4s; }
+@keyframes petal-fall {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(-0.8em, 4.2em) rotate(220deg); opacity: 0; }
+}
+
+/* 5. Ледяной кристалл: a white glint runs round the icy ring */
+.custom-avatar-wrapper.frame-ice::before {
+  background: conic-gradient(#bae6fd 0 65%, #ffffff 75%, #bae6fd 85% 100%);
+  animation-duration: 2.6s;
+}
+.custom-avatar-wrapper.frame-ice { box-shadow: 0 0 14px rgba(125, 211, 252, 0.75), inset 0 0 6px rgba(255, 255, 255, 0.6); }
+.custom-avatar-wrapper.frame-ice .frame-deco-snow {
+  position: absolute; top: -0.35em; right: -0.25em; z-index: 4; font-size: 0.6em; pointer-events: none;
+  animation: frame-spin 6s linear infinite;
+}
+
+/* 6. Лава: slowly turning molten ring */
+.custom-avatar-wrapper.frame-lava::before {
+  background: conic-gradient(#7c2d12, #ea580c, #facc15, #dc2626, #7c2d12);
+  animation-duration: 4s;
+}
+.custom-avatar-wrapper.frame-lava { animation: lava-glow 1.6s ease-in-out infinite alternate; }
+@keyframes lava-glow {
+  from { box-shadow: 0 0 10px rgba(234, 88, 12, 0.7); }
+  to { box-shadow: 0 0 24px rgba(250, 204, 21, 0.8), 0 0 36px rgba(220, 38, 38, 0.5); }
+}
+
+/* 7. Орбита: a planet circles the avatar */
+.custom-avatar-wrapper.frame-orbit { border: 2px solid #818cf8; box-shadow: 0 0 14px rgba(129, 140, 248, 0.7); }
+.custom-avatar-wrapper.frame-orbit .frame-deco-orbit {
+  position: absolute; inset: -0.2em; z-index: 4; pointer-events: none; animation: frame-spin 4.5s linear infinite;
+}
+.custom-avatar-wrapper.frame-orbit .frame-deco-orbit > span { position: absolute; left: 50%; font-size: 0.5em; transform: translateX(-50%); }
+.custom-avatar-wrapper.frame-orbit .orbit-planet { top: -0.6em; }
+.custom-avatar-wrapper.frame-orbit .orbit-star { bottom: -0.5em; font-size: 0.35em; color: #fde68a; }
+
+/* 8. Бриллиант: shining ring and blinking glints */
+.custom-avatar-wrapper.frame-diamond::before {
+  background: conic-gradient(#e0f2fe, #ffffff, #c7d2fe, #f5d0fe, #ffffff, #e0f2fe);
+  animation-duration: 3s;
+}
+.custom-avatar-wrapper.frame-diamond { box-shadow: 0 0 16px rgba(199, 210, 254, 0.9); }
+.custom-avatar-wrapper.frame-diamond .frame-deco-glint {
+  position: absolute; z-index: 4; font-size: 0.45em; color: #ffffff; pointer-events: none;
+  text-shadow: 0 0 6px #a5b4fc; animation: glint 1.8s ease-in-out infinite;
+}
+.custom-avatar-wrapper.frame-diamond .glint-1 { top: -0.2em; right: 0.05em; }
+.custom-avatar-wrapper.frame-diamond .glint-2 { bottom: 0; left: -0.15em; animation-delay: 0.6s; }
+.custom-avatar-wrapper.frame-diamond .glint-3 { top: 40%; right: -0.35em; animation-delay: 1.2s; }
+@keyframes glint {
+  0%, 100% { transform: scale(0) rotate(0deg); opacity: 0; }
+  50% { transform: scale(1.3) rotate(90deg); opacity: 1; }
+}
+
+/* 9. Сердечки: heartbeat and floating hearts */
+.custom-avatar-wrapper.frame-hearts { border: 3px solid #f472b6; animation: heartbeat 1.4s ease-in-out infinite; }
+.custom-avatar-wrapper.frame-hearts .frame-deco-heart {
+  position: absolute; bottom: 0; z-index: 4; font-size: 0.42em; pointer-events: none; opacity: 0;
+  animation: heart-rise 2.7s ease-out infinite;
+}
+.custom-avatar-wrapper.frame-hearts .heart-1 { left: -0.1em; }
+.custom-avatar-wrapper.frame-hearts .heart-2 { right: -0.1em; animation-delay: 0.9s; }
+.custom-avatar-wrapper.frame-hearts .heart-3 { left: 45%; animation-delay: 1.8s; }
+@keyframes heartbeat {
+  0%, 40%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(244, 114, 182, 0.6); }
+  15% { transform: scale(1.06); box-shadow: 0 0 22px rgba(236, 72, 153, 0.9); }
+  28% { transform: scale(1.03); }
+}
+@keyframes heart-rise {
+  0% { transform: translateY(0) scale(0.7); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(-3.6em) scale(1.1); opacity: 0; }
+}
+
+/* 10. Пиксель-арт: 8-bit ring that turns in steps */
+.custom-avatar-wrapper.frame-pixel::before {
+  background: conic-gradient(#22c55e 0 25%, #3b82f6 0 50%, #eab308 0 75%, #ef4444 0);
+  animation: frame-spin 2s steps(8) infinite;
+}
+.custom-avatar-wrapper.frame-pixel { box-shadow: 0 0 0 2px #111827, 0 0 12px rgba(34, 197, 94, 0.5); }
+.custom-avatar-wrapper.frame-pixel .frame-deco-invader {
+  position: absolute; bottom: -0.3em; right: -0.3em; z-index: 4; font-size: 0.55em; pointer-events: none;
+  animation: invader-hop 0.8s steps(2) infinite;
+}
+@keyframes invader-hop {
+  from { transform: translateY(0); }
+  to { transform: translateY(-0.25em); }
+}
+
+@keyframes frame-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .custom-avatar-wrapper, .custom-avatar-wrapper *, .custom-avatar-wrapper::before, .custom-avatar-wrapper::after { animation-duration: 0s !important; animation-iteration-count: 1 !important; }
+}
+
+/* Shop frame card: room for decorations that stick out of the avatar */
+.shop-frame-preview { flex-shrink: 0; padding: 10px; border-radius: 16px; background: radial-gradient(circle at center, #312e81, #0f172a); display: flex; }
+
+/* Purchase preview (shop & profile): the item on the student's own avatar before buying */
+.purchase-preview { margin: auto; border: none; padding: 0; border-radius: 20px; overflow: hidden; width: min(360px, calc(100vw - 32px)); max-width: none; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35); }
+.purchase-preview::backdrop { background: rgba(15, 23, 42, 0.55); }
+.purchase-preview-stage {
+  display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 34px 16px 22px;
+  background: radial-gradient(circle at center, #312e81, #0f172a); color: #fff; text-align: center;
+}
+.purchase-preview-name { font-weight: 800; font-size: 1.15rem; }
+.purchase-preview-desc { font-size: 0.82rem; color: #c7d2fe; }
+.purchase-preview-title { display: inline-block; padding: 2px 10px; border-radius: 999px; background: rgba(255,255,255,0.15); font-size: 0.8rem; font-weight: 700; }
+.purchase-preview-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--color-bg-card); color: var(--color-text-main); }
+.purchase-preview-price { display: flex; justify-content: space-between; font-size: 0.9rem; }
+.purchase-preview-actions { display: flex; gap: 8px; }
+.purchase-preview-actions .btn { flex: 1; font-weight: 700; }
+
 /* Student Profile Title Badges */
 .student-title-badge {
   display: inline-flex;

@@ -11,7 +11,7 @@ import { GAME_RULES } from '../shared/gameStreak.js';
 import { auth } from '../auth.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
-import { PRESET_EMOJIS, AVAILABLE_FRAMES, SECRET_TITLES, renderStudentAvatarHtml, titlePrice, getUnlockedSecretTitles } from '../components/avatarCustomization.js';
+import { PRESET_EMOJIS, AVAILABLE_FRAMES, SECRET_TITLES, renderStudentAvatarHtml, titlePrice, getUnlockedSecretTitles, openPurchasePreview } from '../components/avatarCustomization.js';
 
 export const ShopView = {
   activeTab: 'customization', // 'customization' | 'staff' | 'purchases'
@@ -187,10 +187,10 @@ export const ShopView = {
               const isEquipped = student?.avatarFrame === f.id;
               return `
                 <div class="card" style="padding: var(--space-4); border: 2px solid ${isEquipped ? '#4f46e5' : isUnlocked ? '#22c55e' : 'var(--color-border)'}; border-radius: var(--radius-xl); background: var(--color-bg-card); display: flex; flex-direction: column; justify-content: space-between;">
-                  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                    <div style="font-size: 2.2rem; line-height: 1;">${f.icon}</div>
-                    <div>
-                      <div style="font-weight: 800; font-size: 1rem; color: var(--color-text-main);">${f.name}</div>
+                  <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 12px;">
+                    <div class="shop-frame-preview" title="Так рамка будет выглядеть на твоей аватарке">${student ? renderStudentAvatarHtml({ ...student, avatarFrame: f.id }, { size: 'lg', zoom: false }) : `<span style="font-size: 2.2rem; line-height: 1;">${f.icon}</span>`}</div>
+                    <div style="min-width: 0;">
+                      <div style="font-weight: 800; font-size: 1rem; color: var(--color-text-main);">${f.icon} ${f.name}</div>
                       <div style="font-size: 0.75rem; color: var(--color-text-muted);">${f.desc}</div>
                     </div>
                   </div>
@@ -638,14 +638,8 @@ export const ShopView = {
         const price = Number(btn.dataset.price);
         const icon = btn.dataset.icon;
 
-        const currentBal = student.totalPoints || 0;
-        if (currentBal < price) {
-          toast.error(`Недостаточно баллов! Стоимость: ${price} ⭐, а на вашем балансе: ${currentBal} ⭐. Зарабатывайте баллы на уроках и в мини-играх!`);
-          return;
-        }
-
-        if (confirm(`Приобрести «${name}» за ${price} ⭐?
-После покупки предмет навсегда станет доступен в вашем профиле!`)) {
+        // Preview on the student's own avatar first: price, balance and "equip now"
+        openPurchasePreview(student, { type, id: itemId, name, price, icon }, (equipNow) => {
           const res = store.makePurchase(student.id, {
             type,
             id: itemId,
@@ -658,8 +652,7 @@ export const ShopView = {
 
           if (res.success) {
             toast.success(res.message);
-            // Also offer to equip immediately
-            if (confirm(`Предмет куплен! Хотите надеть «${name}» прямо сейчас?`)) {
+            if (equipNow) {
               if (type === 'avatar') store.updateStudentCustomization(student.id, { avatarUrl: itemId });
               else if (type === 'frame') store.updateStudentCustomization(student.id, { avatarFrame: itemId });
               else if (type === 'title') store.updateStudentCustomization(student.id, { studentTitle: `${icon} ${name}` });
@@ -669,7 +662,7 @@ export const ShopView = {
           } else {
             toast.error(res.message);
           }
-        }
+        });
       });
     });
 

@@ -49,6 +49,13 @@ const SECRET_TITLE_RENAMES = {
   'легенда мини-игр': 'Легенда Step Up'
 };
 
+/** Icons of the secret titles (same as SECRET_TITLES in avatarCustomization.js) for the title shown on the avatar */
+const SECRET_TITLE_ICONS = {
+  'Словарный ниндзя': '🥷', 'Укротитель глаголов': '🐉', 'Мастер «если бы»': '🔮', 'Архитектор миров': '🏛️',
+  'Хранитель времени': '⏳', 'Повелитель Rampage': '🌀', 'Инженер предложений': '🏗️', 'Снайпер предлогов': '🎯',
+  'Фразовый хакер': '🚀', 'Грамматический детектив': '🕵️', 'Молния синонимов': '⚡', 'Легенда Step Up': '👑'
+};
+
 /** Words for the word game when a student has no lesson words yet */
 const DEFAULT_GAME_WORDS = [
   { word: 'Disappear', transcription: '[dɪsəˈpɪə]', translation: 'исчезать', example: 'She suddenly disappeared.' },
@@ -273,7 +280,15 @@ class Store {
         const secret = renameList(s.gameStats.unlockedSecretTitles);
         if (secret !== s.gameStats.unlockedSecretTitles) { s.gameStats.unlockedSecretTitles = secret; this._titlesRenamed = true; }
       }
-      if (rename(s.studentTitle) !== s.studentTitle) { s.studentTitle = rename(s.studentTitle); this._titlesRenamed = true; }
+      // The title on the avatar is stored with its icon ('📖 знаток слов'): new icon + new name
+      if (typeof s.studentTitle === 'string' && s.studentTitle) {
+        const old = Object.keys(SECRET_TITLE_RENAMES).find(o => SECRET_TITLE_RENAMES[o] !== o && (s.studentTitle === o || s.studentTitle.endsWith(' ' + o)));
+        if (old) {
+          const icon = SECRET_TITLE_ICONS[SECRET_TITLE_RENAMES[old]];
+          s.studentTitle = icon ? `${icon} ${SECRET_TITLE_RENAMES[old]}` : SECRET_TITLE_RENAMES[old];
+          this._titlesRenamed = true;
+        }
+      }
     });
   }
 
