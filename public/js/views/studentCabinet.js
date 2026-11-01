@@ -274,12 +274,19 @@ export const StudentCabinet = {
   },
 
   render(container) {
+    // Staff open this page to see it through a student's eyes: read-only, no bonuses awarded
+    const isPreview = !auth.isStudent();
     const studentUser = auth.getCurrentUser();
-    const studentId = studentUser.id;
+    const studentId = isPreview ? this.previewStudentId : studentUser.id;
     const student = store.getStudentById(studentId) || store.getStudents()[0];
+    if (!student) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-state-title">Учеников пока нет</div></div>`;
+      return;
+    }
+    if (isPreview) this.previewStudentId = student.id;
 
     // Check Birthday Bonus (+500 points on birthday)
-    const bdayCheck = store.checkAndAwardBirthdayBonus(student.id);
+    const bdayCheck = isPreview ? null : store.checkAndAwardBirthdayBonus(student.id);
     if (bdayCheck && bdayCheck.awarded) {
       setTimeout(() => {
         modal.open({
@@ -645,7 +652,34 @@ export const StudentCabinet = {
       </div>
     `;
 
+    if (isPreview) {
+      this.renderPreviewBanner(container, student);
+      return;
+    }
     this.bindEvents(container, student, group);
+  },
+
+  /** Staff preview: pick a student; the cabinet below is inert (nothing can be pressed or changed) */
+  renderPreviewBanner(container, student) {
+    const students = [...store.getStudents()].sort((a, b) => (a.fullName || '').localeCompare(b.fullName || '', 'ru'));
+    [...container.children].forEach(el => el.setAttribute('inert', ''));
+    container.insertAdjacentHTML('afterbegin', `
+      <div class="preview-as-banner">
+        <div class="preview-as-title">👁 Кабинет глазами ученика</div>
+        <div class="preview-as-hint">Так его видит ученик (и родители). Здесь ничего нельзя изменить — правки делаются в карточке ученика.</div>
+        <select id="preview-student-select" class="form-control form-control-sm">
+          ${students.map(s => {
+            const g = store.getGroupById(s.groupId);
+            return `<option value="${s.id}" ${s.id === student.id ? 'selected' : ''}>${s.fullName}${g ? ` — ${g.name}` : ''}</option>`;
+          }).join('')}
+        </select>
+      </div>
+    `);
+    container.querySelector('#preview-student-select')?.addEventListener('change', (e) => {
+      this.previewStudentId = e.target.value;
+      this.render(container);
+      window.scrollTo(0, 0);
+    });
   },
 
   bindEvents(container, student, group) {

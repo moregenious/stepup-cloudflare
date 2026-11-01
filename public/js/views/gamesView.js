@@ -2,16 +2,16 @@
  * Mini-Games & Grammar Trainers Hub View
  * Step Up English LMS
  * 
- * 1. Vocabulary Quiz (10 questions, 4 options, streak 3x 10/10 -> "знаток слов")
- * 2. Irregular Verbs (100 verbs, spaced repetition rotation 4/6, streak 3x 10/10 -> "знаток irregular")
- * 3. Conditionals (160 sentences in 4 modes: Type 1, 2, 3, Mixed, streak 3x 10/10 -> "знаток conditional", all modes -> "архитектор условий")
- * 4. Tenses Identification Quiz (5 tiers: Easy -> Middle -> Hard -> Impossible -> Rampage, streak 3x 10/10 -> "повелитель времён", Rampage -> "гений времён")
- * 5. Sentence Builder (40 sentences with interactive word chips, streak 3x 10/10 -> "мастер предложений")
- * 6. Preposition Catcher (60 preposition tasks with grammar rules, streak 3x 10/10 -> "повелитель предлогов")
- * 7. Phrasal Verbs Trainer (60 phrasal tasks with idioms and contexts, streak 3x 10/10 -> "знаток phrasal verbs")
- * 8. Error Detective (50 targeted mistake sentences with explanations, streak 3x 10/10 -> "грамматический детектив")
- * 9. Synonyms & Antonyms Sprint (85 timed 15s blitz questions in pure English, streak 3x 10/10 -> "спринтер слов")
- * 10. Meta Milestone (Earn 5 secret titles -> "легенда мини-игр")
+ * 1. Vocabulary Quiz (10 questions, 4 options, streak 3x 10/10 -> "Словарный ниндзя")
+ * 2. Irregular Verbs (100 verbs, spaced repetition rotation 4/6, streak 3x 10/10 -> "Укротитель глаголов")
+ * 3. Conditionals (160 sentences in 4 modes: Type 1, 2, 3, Mixed, streak 3x 10/10 -> "Мастер «если бы»", all modes -> "Архитектор миров")
+ * 4. Tenses Identification Quiz (5 tiers: Easy -> Middle -> Hard -> Impossible -> Rampage, streak 3x 10/10 -> "Хранитель времени", Rampage -> "Повелитель Rampage")
+ * 5. Sentence Builder (40 sentences with interactive word chips, streak 3x 10/10 -> "Инженер предложений")
+ * 6. Preposition Catcher (60 preposition tasks with grammar rules, streak 3x 10/10 -> "Снайпер предлогов")
+ * 7. Phrasal Verbs Trainer (60 phrasal tasks with idioms and contexts, streak 3x 10/10 -> "Фразовый хакер")
+ * 8. Error Detective (50 targeted mistake sentences with explanations, streak 3x 10/10 -> "Грамматический детектив")
+ * 9. Synonyms & Antonyms Sprint (85 timed 15s blitz questions in pure English, streak 3x 10/10 -> "Молния синонимов")
+ * 10. Meta Milestone (Earn 5 secret titles -> "Легенда Step Up")
  */
 
 import { store } from '../store.js';
@@ -28,8 +28,26 @@ import { PHRASAL_VERBS_DATA } from '../data/phrasalVerbsData.js';
 import { FIND_MISTAKE_DATA } from '../data/findMistakeData.js';
 import { SYNONYMS_ANTONYMS_DATA } from '../data/synonymsAntonymsData.js';
 
+/** Games on the choice page (key = GamesView.activeTab, streakKey = field of the game progress) */
+const GAMES = [
+  { key: 'words', icon: '🔤', name: 'Слова', desc: 'Новые слова с урока и повторение старых', streakKey: 'wordsStreak' },
+  { key: 'irregular', icon: '⚡', name: 'Глаголы V1–V3', desc: 'Неправильные глаголы: три формы', streakKey: 'irregularStreak' },
+  { key: 'conditionals', icon: '⚖️', name: 'Conditionals', desc: 'Условные предложения 1, 2, 3 и смешанные', streakKey: 'conditionalStreak' },
+  { key: 'tenses', icon: '⏱️', name: 'Времена', desc: 'Определи время глагола — от лёгкого до Rampage', streakKey: 'tensesStreak' },
+  { key: 'builder', icon: '🧩', name: 'Конструктор', desc: 'Собери предложение из слов', streakKey: 'builderStreak' },
+  { key: 'prepositions', icon: '🎯', name: 'Предлоги', desc: 'Выбери правильный предлог', streakKey: 'prepositionsStreak' },
+  { key: 'phrasal', icon: '🚀', name: 'Фразовые глаголы', desc: 'Значения фразовых глаголов в контексте', streakKey: 'phrasalStreak' },
+  { key: 'mistakes', icon: '🕵️', name: 'Найди ошибку', desc: 'Найди и исправь ошибку в предложении', streakKey: 'mistakesStreak' },
+  { key: 'synonyms', icon: '⚡', name: 'Синонимы и антонимы', desc: 'Блиц на время: 15 секунд на ответ', streakKey: 'synonymsStreak' }
+];
+
+// Opening the "Mini-games" tab always starts on the game choice page
+if (typeof window !== 'undefined') {
+  window.addEventListener('hashchange', () => { if (window.location.hash === '#games') GamesView.activeTab = null; });
+}
+
 export const GamesView = {
-  activeTab: 'words', // 'words' | 'irregular' | 'conditionals' | 'tenses' | 'builder' | 'prepositions' | 'phrasal' | 'mistakes' | 'synonyms'
+  activeTab: null, // null = game choice page | 'words' | 'irregular' | 'conditionals' | 'tenses' | 'builder' | 'prepositions' | 'phrasal' | 'mistakes' | 'synonyms'
   activeConditionalMode: 'type1', // 'type1' | 'type2' | 'type3' | 'mixed'
   activeTenseLevel: 'easy', // 'easy' | 'middle' | 'hard' | 'impossible' | 'rampage'
 
@@ -75,6 +93,29 @@ export const GamesView = {
     };
 
     const weeklyPercent = Math.min(100, Math.round((progress.weeklyPoints / progress.weeklyLimit) * 100));
+    const activeGame = GAMES.find(g => g.key === this.activeTab) || null;
+
+    // Inside a game: a compact bar with the way back; the full panel stays on the game choice page
+    if (activeGame) {
+      container.innerHTML = `
+        <div class="games-view-container">
+          <div class="games-play-topbar">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-games-back">← Все игры</button>
+            <div class="games-play-name">${activeGame.icon} ${activeGame.name}</div>
+            ${isStudent ? `<div class="games-play-stats" title="Недельный лимит и серия">⭐ ${progress.weeklyPoints}/${progress.weeklyLimit} · 🔥 ${progress.dailyStreak || 0} дн.</div>` : ''}
+          </div>
+          <div id="active-game-mount"></div>
+        </div>
+      `;
+      container.querySelector('#btn-games-back').addEventListener('click', () => {
+        if (this.synonymsState?.timer) clearInterval(this.synonymsState.timer);
+        this.activeTab = null;
+        this.render(container);
+        window.scrollTo(0, 0);
+      });
+      this.mountActiveGame(container, studentId);
+      return;
+    }
 
     container.innerHTML = `
       <div class="games-view-container">
@@ -102,9 +143,9 @@ export const GamesView = {
                 <span>⭐ Недельный лимит:</span>
                 <span style="color: #fef08a; font-size: 0.95rem;">${progress.weeklyPoints} / ${progress.weeklyLimit} баллов</span>
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: #fde047; margin-bottom: 2px; font-weight: 600;" title="День засчитывается в серию, если за день набрать в играх не меньше ${progress.minDailyScore || 10} баллов. Каждые 7 дней серии подряд: +10 к недельному лимиту (до 500). Каждый пропущенный день: −10 (не ниже 100).">
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: #fde047; margin-bottom: 2px; font-weight: 600;" title="День засчитывается в серию, если за день набрать в играх не меньше ${progress.minDailyScore || 10} баллов. Каждый день серии: +10 к недельному лимиту (до 300). Каждый пропущенный день: −10 (не ниже 100).">
                 <span>🔥 Серия: ${progress.dailyStreak || 0} дн.</span>
-                <span>+${progress.streakBonus || 0} к лимиту${progress.daysToNextLevel ? ` · ещё +10 через ${progress.daysToNextLevel} дн.` : ''}</span>
+                <span>+${progress.streakBonus || 0} к лимиту${progress.daysToNextLevel ? (progress.todayCounted ? ' · завтра ещё +10' : ' · сегодня +10') : ' (максимум)'}</span>
               </div>
               <div style="font-size: 0.68rem; color: #e0e7ff; margin-bottom: 6px;">
                 ${progress.todayCounted ? '✅ Сегодня день засчитан в серию' : `Сегодня: ${progress.todayScore || 0} / ${progress.minDailyScore || 10} ⭐ — наберите ${progress.minDailyScore || 10}, чтобы день засчитался`}
@@ -160,43 +201,23 @@ export const GamesView = {
           ` : ''}
         </div>
 
-        <!-- Game Navigation Tabs: 9 Modern Interactive Games -->
-        <div class="games-tabs-bar" style="display: flex; gap: 8px; margin-bottom: var(--space-4); overflow-x: auto; padding-bottom: 6px; flex-wrap: wrap;">
-          <button type="button" class="btn ${this.activeTab === 'words' ? 'btn-primary' : 'btn-secondary'} tab-game-btn" data-game="words" style="min-width: 140px; font-weight: 700; border-radius: var(--radius-lg);">
-            <span>🔤 Слова</span>
-          </button>
-          <button type="button" class="btn ${this.activeTab === 'irregular' ? 'btn-primary' : 'btn-secondary'} tab-game-btn" data-game="irregular" style="min-width: 160px; font-weight: 700; border-radius: var(--radius-lg);">
-            <span>⚡ Глаголы V1-V3</span>
-          </button>
-          <button type="button" class="btn ${this.activeTab === 'conditionals' ? 'btn-primary' : 'btn-secondary'} tab-game-btn" data-game="conditionals" style="min-width: 160px; font-weight: 700; border-radius: var(--radius-lg);">
-            <span>⚖️ Conditionals</span>
-          </button>
-          <button type="button" class="btn ${this.activeTab === 'tenses' ? 'btn-primary' : 'btn-secondary'} tab-game-btn" data-game="tenses" style="min-width: 140px; font-weight: 700; border-radius: var(--radius-lg);">
-            <span>⏱️ Времена</span>
-          </button>
-          <button type="button" class="btn ${this.activeTab === 'builder' ? 'btn-primary' : 'btn-secondary'} tab-game-btn" data-game="builder" style="min-width: 160px; font-weight: 700; border-radius: var(--radius-lg);">
-            <span>🧩 Конструктор</span>
-          </button>
-          <button type="button" class="btn ${this.activeTab === 'prepositions' ? 'btn-primary' : 'btn-secondary'} tab-game-btn" data-game="prepositions" style="min-width: 150px; font-weight: 700; border-radius: var(--radius-lg);">
-            <span>🎯 Предлоги</span>
-          </button>
-          <button type="button" class="btn ${this.activeTab === 'phrasal' ? 'btn-primary' : 'btn-secondary'} tab-game-btn" data-game="phrasal" style="min-width: 155px; font-weight: 700; border-radius: var(--radius-lg);">
-            <span>🚀 Фразовые</span>
-          </button>
-          <button type="button" class="btn ${this.activeTab === 'mistakes' ? 'btn-primary' : 'btn-secondary'} tab-game-btn" data-game="mistakes" style="min-width: 150px; font-weight: 700; border-radius: var(--radius-lg);">
-            <span>🕵️ Найди ошибку</span>
-          </button>
-          <button type="button" class="btn ${this.activeTab === 'synonyms' ? 'btn-primary' : 'btn-secondary'} tab-game-btn" data-game="synonyms" style="min-width: 165px; font-weight: 700; border-radius: var(--radius-lg);">
-            <span>⚡ Синонимы / Ант.</span>
-          </button>
+        <!-- Game choice: one card per game -->
+        <h3 class="games-choice-title">Выбери игру</h3>
+        <div class="games-choice-grid">
+          ${GAMES.map(g => `
+            <button type="button" class="games-choice-card tab-game-btn" data-game="${g.key}">
+              <span class="games-choice-icon">${g.icon}</span>
+              <span class="games-choice-text">
+                <span class="games-choice-name">${g.name}</span>
+                <span class="games-choice-desc">${g.desc}</span>
+              </span>
+              ${isStudent ? `<span class="games-choice-streak" title="Побед 10/10 подряд для секретного титула">🔥 ${progress[g.streakKey] || 0}/3</span>` : ''}
+            </button>
+          `).join('')}
         </div>
-
-        <!-- Active Game Container Mount -->
-        <div id="active-game-mount"></div>
       </div>
     `;
 
-    this.mountActiveGame(container, studentId);
     this.bindTabEvents(container, studentId);
   },
 
@@ -219,18 +240,8 @@ export const GamesView = {
           this.synonymsState = null;
         }
 
-        // Smooth tab toggle without re-creating outer DOM or resetting scroll
-        container.querySelectorAll('.tab-game-btn').forEach(b => {
-          if (b.dataset.game === this.activeTab) {
-            b.classList.remove('btn-secondary');
-            b.classList.add('btn-primary');
-          } else {
-            b.classList.remove('btn-primary');
-            b.classList.add('btn-secondary');
-          }
-        });
-
-        this.mountActiveGame(container, studentId);
+        this.render(container);
+        window.scrollTo(0, 0);
       });
     });
   },
@@ -265,7 +276,8 @@ export const GamesView = {
   // =========================================================================
 
   initWordsRound(studentId) {
-    const rawWords = store.getPrioritizedVocabularyForGame(studentId, 10);
+    const round = store.getWordGameRound(studentId, 10);
+    const rawWords = round.words;
     const poolData = store.getStudentVocabularyPool(studentId);
 
     // Build candidate translations pool for unique distractors
@@ -331,6 +343,7 @@ export const GamesView = {
     });
 
     this.wordsState = {
+      round,
       questions,
       currentIndex: 0,
       score: 0,
@@ -360,7 +373,7 @@ export const GamesView = {
               <span>🔤</span> <span>Тест по словам: выберите правильный перевод</span>
             </h3>
             <p style="margin: 2px 0 0 0; font-size: var(--font-size-xs); color: var(--color-text-muted);">
-              Слова с последнего урока и тем. 3 победы 10/10 подряд открывают секретный титул!
+              ${state.round ? `<strong style="color: var(--color-primary);">${state.round.title}${state.round.lessonLabel && state.round.phase !== 'mix' ? ` (урок ${state.round.lessonLabel})` : ''}</strong> · ` : ''}3 победы 10/10 подряд открывают секретный титул!
             </p>
           </div>
           <div style="display: flex; align-items: center; gap: 10px;">
@@ -531,6 +544,7 @@ export const GamesView = {
     const isStudent = auth.isStudent();
     const awardResult = isStudent && studentId ? store.awardGamePoints(studentId, state.score, 'words', 'Тест по словам') : { pointsAwarded: 0, weeklyTotal: 0 };
     const gameResult = isStudent && studentId ? store.recordGameResult(studentId, 'words', state.score, 10) : { newTitleUnlocked: null, currentStreak: 0 };
+    if (isStudent && studentId) store.recordWordGameRound(studentId, state.round, state.questions);
 
     const isPerfect = state.score === 10;
     const modalTitle = isPerfect ? '🎯 10 из 10! Безупречный результат!' : 'Раунд завершен!';

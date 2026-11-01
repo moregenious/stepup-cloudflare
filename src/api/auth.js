@@ -1,6 +1,6 @@
 import { logServerEvent } from '../lib/events.js';
 import { json, readJson, route, HttpError } from '../lib/http.js';
-import { loginStaff, loginStudentPin, loginStudentQr, describeSession, logoutCookie } from '../lib/auth.js';
+import { loginStaff, loginStudentPin, loginStudentQr, describeSession, logStudentVisit, logoutCookie } from '../lib/auth.js';
 
 /** GET /api/auth -> current session */
 export const GET = route(async (request) => json(await describeSession(request)));
@@ -21,6 +21,8 @@ export const POST = route(async (request) => {
       break;
     case 'logout':
       return json({ success: true }, 200, { 'Set-Cookie': logoutCookie(request) });
+    case 'visit':
+      return json(await logStudentVisit(request));
     default:
       throw new HttpError(400, 'Неизвестное действие');
   }

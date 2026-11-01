@@ -63,8 +63,15 @@ export const TeacherCabinet = {
     this.setupAutoRefresh(container);
 
     const teacherUser = auth.getCurrentUser();
-    const teacherId = teacherUser.id;
+    // Admin sees the cabinet of the teacher chosen in the header filter (or the first one)
+    const isAdminView = auth.isAdmin();
+    const activeTeachers = store.getTeachers().filter(t => t.status !== 'archived');
+    const teacherId = isAdminView ? (store.scopeTeacherId() || activeTeachers[0]?.id) : teacherUser.id;
     const teacher = store.getTeacherById(teacherId) || store.getTeachers()[0];
+    if (!teacher) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-state-title">Преподавателей пока нет</div></div>`;
+      return;
+    }
 
     const myGroups = store.getGroups({ teacherId: teacher.id });
     const mySchedule = store.getSchedule({ teacherId: teacher.id });
@@ -241,7 +248,24 @@ export const TeacherCabinet = {
     const paidCount = groupStudentPayments.filter(sp => sp.payment.status === 'paid').length;
     const unpaidCount = activeGroupStudents.length - paidCount;
 
+    // Purchases: the group whose lesson is on now / next by the schedule (joined groups included), or all my students
+    const lessonStudentIds = new Set((groupLessonToday ? store.getLessonStudents(groupLessonToday) : activeGroupStudents).map(s => s.id));
+    const byNewest = (a, b) => new Date(b.date || 0) - new Date(a.date || 0);
+    const groupPurchases = teacherPurchases.filter(p => lessonStudentIds.has(p.studentId)).sort(byNewest);
+    const purchasesTab = this.purchasesTab === 'all' ? 'all' : 'group';
+    const shownPurchases = purchasesTab === 'all' ? [...teacherPurchases].sort(byNewest) : groupPurchases;
+    const purchaseGroupName = groupLessonToday?.groupName || activeGroup?.name || 'группа';
+
     container.innerHTML = `
+      ${isAdminView ? `
+        <div class="preview-as-banner">
+          <div class="preview-as-title">👁 Кабинет преподавателя глазами администратора</div>
+          <div class="preview-as-hint">Здесь всё работает как у преподавателя, но изменения записываются от вашего имени. Остальные разделы тоже показывают учеников и группы выбранного преподавателя.</div>
+          <select id="preview-teacher-select" class="form-control form-control-sm">
+            ${activeTeachers.map(t => `<option value="${t.id}" ${t.id === teacher.id ? 'selected' : ''}>${t.fullName}</option>`).join('')}
+          </select>
+        </div>
+      ` : ''}
       <div class="section-header">
         <div class="section-title-wrap">
           <h1>Кабинет Преподавателя</h1>
@@ -553,73 +577,55 @@ export const TeacherCabinet = {
         </div>
 
       <!-- Student Purchases Section in Teacher Cabinet -->
-      <div class="card" style="margin-top: var(--space-6);">
+      <div class="card" style="margin-top: var(--space-6);" id="teacher-purchases-card">
         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2);">
-          <div>
-            <h3 class="card-title">🛍️ Покупки моих учеников в магазине</h3>
-            <p class="card-subtitle">Список купленных аватаров, рамок, титулов и товаров. Вы можете отменить покупку без штрафа для ученика с автоматическим возвратом баллов.</p>
+          <div style="min-width:0;">
+            <h3 class="card-title">🛍️ Покупки учеников</h3>
+            <p class="card-subtitle">Что купили ученики в магазине. Покупку можно отменить — баллы вернутся ученику без штрафа.</p>
           </div>
           <a href="#shop" class="btn btn-secondary btn-sm">Перейти в магазин ➔</a>
         </div>
 
-        <div>
-          ${teacherPurchases.length === 0 ? `
-            <div class="empty-state" style="padding: var(--space-6) 0;">
-              <div class="empty-state-icon">🛍️</div>
-              <div class="empty-state-title">Покупок пока нет</div>
-              <div class="empty-state-desc">Когда ученики совершат покупки в магазине за баллы, они отобразятся здесь.</div>
-            </div>
-          ` : `
-            <div class="table-responsive">
-              <table class="table" style="font-size: var(--font-size-xs);">
-                <thead>
-                  <tr>
-                    <th>Дата</th>
-                    <th>Ученик</th>
-                    <th>Товар</th>
-                    <th>Тип</th>
-                    <th>Списано</th>
-                    <th>Статус</th>
-                    <th>Действие</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${teacherPurchases.map(pur => {
-                    const st = store.getStudentById(pur.studentId);
-                    const isCompleted = pur.status === 'completed';
-                    return `
-                      <tr>
-                        <td>${new Date(pur.date).toLocaleDateString('ru-RU')}</td>
-                        <td><strong>${st ? st.fullName : pur.studentName || '—'}</strong></td>
-                        <td>${pur.itemName}</td>
-                        <td>
-                          <span class="badge" style="font-size:0.65rem;">
-                            ${pur.itemType === 'avatar' ? '🎭 Аватар' : pur.itemType === 'frame' ? '🖼️ Рамка' : pur.itemType === 'title' ? '👑 Титул' : '📦 Товар'}
-                          </span>
-                        </td>
-                        <td><strong style="color:#f59e0b;">${pur.price} ⭐</strong></td>
-                        <td>
-                          <span class="badge badge-${isCompleted ? 'completed' : 'cancelled'}">
-                            ${isCompleted ? '✓ Оплачен' : '✕ Отменен'}
-                          </span>
-                        </td>
-                        <td>
-                          ${isCompleted ? `
-                            <button class="btn btn-danger btn-xs btn-teacher-cancel-purchase" data-id="${pur.id}" title="Отменить покупку и вернуть ${pur.price} баллов">
-                              ❌ Отменить покупку
-                            </button>
-                          ` : `
-                            <span class="text-muted text-xs">Баллы возвращены (${pur.cancelledBy || 'отмена'})</span>
-                          `}
-                        </td>
-                      </tr>
-                    `;
-                  }).join('')}
-                </tbody>
-              </table>
-            </div>
-          `}
+        <div class="tc-purchase-tabs">
+          <button type="button" class="tc-purchase-tab ${purchasesTab === 'group' ? 'active' : ''}" data-ptab="group">
+            ${groupLessonToday ? '🟢' : '👥'} Группа урока: ${purchaseGroupName} <span class="tc-purchase-count">${groupPurchases.length}</span>
+          </button>
+          <button type="button" class="tc-purchase-tab ${purchasesTab === 'all' ? 'active' : ''}" data-ptab="all">
+            Все мои ученики <span class="tc-purchase-count">${teacherPurchases.length}</span>
+          </button>
         </div>
+
+        ${shownPurchases.length === 0 ? `
+          <div class="empty-state" style="padding: var(--space-6) 0;">
+            <div class="empty-state-icon">🛍️</div>
+            <div class="empty-state-title">Покупок пока нет</div>
+            <div class="empty-state-desc">${purchasesTab === 'group' ? `Ученики группы «${purchaseGroupName}» ещё ничего не покупали.` : 'Когда ученики совершат покупки в магазине за баллы, они отобразятся здесь.'}</div>
+          </div>
+        ` : `
+          <div class="tc-purchase-list">
+            ${shownPurchases.map(pur => {
+              const st = store.getStudentById(pur.studentId);
+              const isCompleted = pur.status === 'completed';
+              const pType = pur.type || pur.itemType;
+              const typeLabel = pType === 'avatar' ? '🎭 Аватар' : pType === 'frame' ? '🖼️ Рамка' : pType === 'title' ? '👑 Титул' : pType === 'streak_freeze' ? '❄️ Заморозка' : '📦 Товар';
+              return `
+                <div class="tc-purchase-row ${isCompleted ? '' : 'is-cancelled'}">
+                  <div class="tc-purchase-main">
+                    <div class="tc-purchase-item">${pur.itemName} <span class="badge" style="font-size:0.65rem;">${typeLabel}</span></div>
+                    <div class="tc-purchase-meta"><strong>${st ? st.fullName : pur.studentName || '—'}</strong> • ${new Date(pur.date).toLocaleDateString('ru-RU')} • <strong style="color:#f59e0b;">${pur.price} ⭐</strong></div>
+                  </div>
+                  <div class="tc-purchase-actions">
+                    ${isCompleted ? `
+                      <button class="btn btn-danger btn-xs btn-teacher-cancel-purchase" data-id="${pur.id}" title="Отменить покупку и вернуть ${pur.price} баллов">❌ Отменить</button>
+                    ` : `
+                      <span class="badge badge-cancelled" title="Баллы возвращены (${pur.cancelledBy || 'отмена'})">✕ Отменена</span>
+                    `}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `}
       </div>
     `;
 
@@ -642,6 +648,21 @@ export const TeacherCabinet = {
     }
 
     // Active Group Selector
+    container.querySelector('#preview-teacher-select')?.addEventListener('change', (e) => {
+      // Same switch as the header filter, so every section follows the chosen teacher
+      store.setAdminTeacherFilter(e.target.value);
+      this.selectedGroupId = null;
+      this.selectedStudentIds = null;
+      this.render(container);
+      if (window.app?.updateAdminTeacherFilter) window.app.updateAdminTeacherFilter();
+    });
+
+    container.querySelectorAll('.tc-purchase-tab').forEach(btn => btn.addEventListener('click', () => {
+      this.purchasesTab = btn.dataset.ptab;
+      this.render(container);
+      document.getElementById('teacher-purchases-card')?.scrollIntoView({ block: 'nearest' });
+    }));
+
     container.querySelector('#select-cabinet-active-group')?.addEventListener('change', (e) => {
       this.selectedGroupId = e.target.value;
       this.selectedStudentIds = null;

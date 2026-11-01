@@ -37,18 +37,18 @@ export function getUnlockedSecretTitles(student) {
 }
 
 export const SECRET_TITLES = [
-  { text: 'знаток слов', icon: '📖', desc: 'Награда за 3 победы 10/10 подряд в тесте по словам' },
-  { text: 'знаток irregular', icon: '⚡', desc: 'Награда за 3 победы 10/10 подряд в неправильных глаголах' },
-  { text: 'знаток conditional', icon: '⚖️', desc: 'Награда за 3 победы 10/10 подряд в условных предложениях' },
-  { text: 'архитектор условий', icon: '🏛️', desc: 'Награда за победы 10/10 во всех 4 режимах Conditionals (Type 1, 2, 3, Mixed)' },
-  { text: 'повелитель времён', icon: '⚡', desc: 'Награда за 3 победы 10/10 подряд в тесте по временам' },
-  { text: 'гений времён', icon: '⏳', desc: 'Награда за покорение уровня Rampage во всех 12 временах' },
-  { text: 'мастер предложений', icon: '🧩', desc: 'Награда за 3 победы 10/10 подряд в конструкторе предложений' },
-  { text: 'повелитель предлогов', icon: '🎯', desc: 'Награда за 3 победы 10/10 подряд в ловце предлогов' },
-  { text: 'знаток phrasal verbs', icon: '🚀', desc: 'Награда за 3 победы 10/10 подряд в фразовых глаголах' },
-  { text: 'грамматический детектив', icon: '🕵️', desc: 'Награда за 3 победы 10/10 подряд в поиске ошибок' },
-  { text: 'спринтер слов', icon: '⚡', desc: 'Награда за 3 победы 10/10 подряд в синонимах и антонимах' },
-  { text: 'легенда мини-игр', icon: '👑', desc: 'Награда за открытие 5 любых секретных титулов' }
+  { text: 'Словарный ниндзя', icon: '🥷', desc: 'Награда за 3 победы 10/10 подряд в тесте по словам' },
+  { text: 'Укротитель глаголов', icon: '🐉', desc: 'Награда за 3 победы 10/10 подряд в неправильных глаголах' },
+  { text: 'Мастер «если бы»', icon: '🔮', desc: 'Награда за 3 победы 10/10 подряд в условных предложениях' },
+  { text: 'Архитектор миров', icon: '🏛️', desc: 'Награда за победы 10/10 во всех 4 режимах Conditionals (Type 1, 2, 3, Mixed)' },
+  { text: 'Хранитель времени', icon: '⏳', desc: 'Награда за 3 победы 10/10 подряд в тесте по временам' },
+  { text: 'Повелитель Rampage', icon: '🌀', desc: 'Награда за покорение уровня Rampage во всех 12 временах' },
+  { text: 'Инженер предложений', icon: '🏗️', desc: 'Награда за 3 победы 10/10 подряд в конструкторе предложений' },
+  { text: 'Снайпер предлогов', icon: '🎯', desc: 'Награда за 3 победы 10/10 подряд в ловце предлогов' },
+  { text: 'Фразовый хакер', icon: '🚀', desc: 'Награда за 3 победы 10/10 подряд в фразовых глаголах' },
+  { text: 'Грамматический детектив', icon: '🕵️', desc: 'Награда за 3 победы 10/10 подряд в поиске ошибок' },
+  { text: 'Молния синонимов', icon: '⚡', desc: 'Награда за 3 победы 10/10 подряд в синонимах и антонимах' },
+  { text: 'Легенда Step Up', icon: '👑', desc: 'Награда за открытие 5 любых секретных титулов' }
 ];
 
 export const PRESET_EMOJIS = [
@@ -463,7 +463,7 @@ export function openCustomizationModal(student, onSave = null) {
           const frameIcon = card.dataset.frameIcon || '✨';
 
           if (!isUnlocked) {
-            promptBuyItem('frame', frameId, `Рамка «${frameName}»`, 100, frameIcon);
+            promptBuyItem('frame', frameId, frameName, 100, frameIcon);
             return;
           }
 
@@ -483,7 +483,7 @@ export function openCustomizationModal(student, onSave = null) {
           const titleIcon = chip.dataset.titleIcon || '🏷️';
 
           if (!isUnlocked) {
-            promptBuyItem('title', titleName, `Титул «${titleName}»`, Number(chip.dataset.titlePrice) || DEFAULT_TITLE_PRICE, titleIcon);
+            promptBuyItem('title', titleName, titleName, Number(chip.dataset.titlePrice) || DEFAULT_TITLE_PRICE, titleIcon);
             return;
           }
 

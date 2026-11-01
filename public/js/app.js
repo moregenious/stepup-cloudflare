@@ -261,7 +261,8 @@ export class App {
         this.renderCurrentView(true);
       }
     } else {
-      if (window.location.hash === '#student-cabinet' || window.location.hash === '#login') {
+      // (#student-cabinet is the read-only "through a student's eyes" preview for the admin)
+      if (window.location.hash === '#login') {
         window.location.hash = '#dashboard';
       } else {
         this.renderCurrentView(true);
@@ -284,6 +285,14 @@ export class App {
         <a href="#dashboard" class="nav-item ${this.currentHash === '#dashboard' ? 'active' : ''}">
           <span class="nav-item-icon">📊</span>
           <span>Дашборд</span>
+        </a>
+        <a href="#teacher-cabinet" class="nav-item ${this.currentHash === '#teacher-cabinet' ? 'active' : ''}">
+          <span class="nav-item-icon">👩‍🏫</span>
+          <span>Как преподаватель</span>
+        </a>
+        <a href="#student-cabinet" class="nav-item ${this.currentHash === '#student-cabinet' ? 'active' : ''}">
+          <span class="nav-item-icon">👁</span>
+          <span>Глазами ученика</span>
         </a>
         <a href="#groups" class="nav-item ${this.currentHash === '#groups' ? 'active' : ''}">
           <span class="nav-item-icon">👥</span>

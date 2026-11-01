@@ -63,9 +63,25 @@ class Auth {
       if (res.role !== this.currentRole || res.user?.id !== expectedId) {
         this.applySession(res.role, res.user?.id);
       }
+      if (res.role === 'student') this.reportVisit(res.user?.id);
     } catch (e) {
       // Offline: keep the cached session, data will sync when the connection returns
     }
+  }
+
+  /**
+   * A student opening the site with a saved session (bookmark, saved link) is logged as a visit,
+   * at most once per VISIT_LOG_HOURS so page reloads do not flood the activity log.
+   */
+  reportVisit(studentId) {
+    const VISIT_LOG_HOURS = 3;
+    const key = 'stepup_visit_logged_' + studentId;
+    try {
+      const last = Number(localStorage.getItem(key) || 0);
+      if (Date.now() - last < VISIT_LOG_HOURS * 3600 * 1000) return;
+      localStorage.setItem(key, String(Date.now()));
+    } catch (e) { /* storage blocked: still report */ }
+    apiRequest('/api/auth', { body: { action: 'visit' } }).catch(() => {});
   }
 
   applySession(role, userId) {
@@ -96,6 +112,8 @@ class Auth {
       if (this.isLoggedIn && store.sync.hasPendingChanges()) await store.sync.flush(15000);
       const res = await apiRequest('/api/auth', { body: payload });
       this.applySession(res.role, res.user?.id);
+      // The login itself is already in the log: the next visit report starts counting from now
+      if (res.role === 'student') { try { localStorage.setItem('stepup_visit_logged_' + res.user?.id, String(Date.now())); } catch (e) { /* ignore */ } }
       // Wait for the first data load so the cabinet opens with data
       await Promise.race([store.whenReady(), new Promise(r => setTimeout(r, 15000))]);
       track('app_open', { via: payload.action, ...deviceInfo() });

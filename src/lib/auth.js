@@ -231,6 +231,20 @@ export async function loginStudentQr(request, rawToken) {
   return { session, body: { success: true, role: 'student', user: { id: student.id, fullName: student.fullName }, message: `Добро пожаловать, ${student.fullName}!` } };
 }
 
+/**
+ * A student who is already signed in (saved link, bookmark, reopened tab) does not log in again,
+ * so the site would never see the visit. The app reports it (at most every few hours, see auth.js).
+ */
+export async function logStudentVisit(request) {
+  const user = await getSessionUser(request);
+  if (!user || user.role !== 'student') return { success: true, logged: false };
+  await ensureBootstrapped();
+  const student = await loadRow('students', user.uid);
+  if (!student) return { success: true, logged: false };
+  await appendActivityLog({ type: 'auth', title: 'Заход на сайт', details: `Ученик ${student.fullName} открыл сайт (вход был сохранён в браузере)`, authorName: student.fullName, authorRole: 'student' });
+  return { success: true, logged: true };
+}
+
 export async function describeSession(request) {
   const user = await getSessionUser(request);
   if (!user) return { success: true, authenticated: false };

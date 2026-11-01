@@ -672,7 +672,7 @@ export const StudentsView = {
                 ${purchases.map(pur => `
                   <div style="padding:var(--space-2) var(--space-3); background:var(--color-bg-app); border-radius:var(--radius-md); font-size:var(--font-size-xs); display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                      <span style="font-weight:700;">${pur.itemType === 'avatar' ? '🎭' : pur.itemType === 'frame' ? '🖼️' : pur.itemType === 'title' ? '👑' : '📦'} ${pur.itemName}</span>
+                      <span style="font-weight:700;">${(pur.type || pur.itemType) === 'avatar' ? '🎭' : (pur.type || pur.itemType) === 'frame' ? '🖼️' : (pur.type || pur.itemType) === 'title' ? '👑' : (pur.type || pur.itemType) === 'streak_freeze' ? '' : '📦'} ${pur.itemName}</span>
                       <span class="text-muted" style="margin-left:6px;">(${new Date(pur.date).toLocaleDateString('ru-RU')})</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">

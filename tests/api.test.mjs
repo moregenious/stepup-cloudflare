@@ -83,6 +83,14 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   assert.equal(rowsOf(sview, 'payments').length, 1);
   assert.ok(!Object.keys(sview.json.shards).some(k => k.startsWith('activityLogs')));
 
+  // A student who opens the site with a saved session is logged as a visit; staff and guests are not
+  const visit = await call('/api/auth', { body: { action: 'visit' }, cookie: student.cookie });
+  assert.equal(visit.json.logged, true);
+  assert.equal((await call('/api/auth', { body: { action: 'visit' }, cookie: admin.cookie })).json.logged, false);
+  assert.equal((await call('/api/auth', { body: { action: 'visit' } })).json.logged, false);
+  const visitLogs = rowsOf(await call('/api/state', { body: { known: {} }, cookie: admin.cookie }), 'activityLogs');
+  assert.ok(visitLogs.some(l => l.title === 'Заход на сайт' && l.authorName === s1.fullName));
+
   // No-change poll returns nothing
   // (the student login above appended an activity log, so refresh once first)
   const known = Object.fromEntries(Object.entries(full.json.shards).map(([k, s]) => [k, s.rev]));
@@ -110,7 +118,7 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   ] } });
   assert.deepEqual(hack.json.results.map(r => r.ok), [false, false, false]);
 
-  // Mini-games: the server applies the weekly limit (100 at the start) and keeps the streak
+  // Mini-games: the server applies the weekly limit (100 at the start, +10 for the first streak day) and keeps the streak
   const games = [];
   for (let i = 0; i < 12; i++) {
     games.push({ c: 'pointRecords', id: `pt-game-${i}`, t: 'put', v: { studentId: 'stu-1', points: 10, gameScore: 10, gameTitle: 'Тест', category: 'Мини-игры' } });
@@ -119,16 +127,16 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   assert.ok(g.json.results.every(r => r.ok), JSON.stringify(g.json.results));
   const gState = await call('/api/state', { body: { known: {} }, cookie: student.cookie });
   const me = rowsOf(gState, 'students').find(s => s.id === 'stu-1');
-  assert.equal(me.gameLedger.pts, 100);
+  assert.equal(me.gameLedger.pts, 110);
   assert.equal(me.gameLedger.streak, 1);
-  assert.equal(rowsOf(gState, 'pointRecords').filter(r => r.category === 'Мини-игры').reduce((a, r) => a + r.points, 0), 100);
+  assert.equal(rowsOf(gState, 'pointRecords').filter(r => r.category === 'Мини-игры').reduce((a, r) => a + r.points, 0), 110);
   // Student cannot raise the limit by editing the ledger
   await call('/api/push', { cookie: student.cookie, body: { ops: [{ c: 'students', id: 'stu-1', t: 'patch', set: [[['gameLedger', 'level'], 40]], unset: [] }] } });
   const g2 = await call('/api/push', { cookie: student.cookie, body: { ops: [{ c: 'pointRecords', id: 'pt-game-x', t: 'put', v: { studentId: 'stu-1', points: 10, gameScore: 10, category: 'Мини-игры' } }] } });
   assert.equal(g2.json.results[0].ok, true);
   const gState2 = await call('/api/state', { body: { known: {} }, cookie: student.cookie });
   assert.equal(rowsOf(gState2, 'pointRecords').some(r => r.id === 'pt-game-x'), false, 'no record over the limit');
-  assert.equal(rowsOf(gState2, 'students').find(s => s.id === 'stu-1').gameLedger.level, 0);
+  assert.equal(rowsOf(gState2, 'students').find(s => s.id === 'stu-1').gameLedger.level, 1);
   // Re-sending an already saved record (lost response) is accepted without changes
   const again = await call('/api/push', { cookie: student.cookie, body: { ops: [games[0]] } });
   assert.equal(again.json.results[0].ok, true);

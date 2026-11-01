@@ -4,8 +4,8 @@
  *
  * Rules:
  *  - A day counts for the streak when the student scores at least MIN_DAILY_SCORE points in mini-games that day.
- *  - Every DAYS_PER_LEVEL counted days in a row raise the weekly limit by STEP (BASE … MAX).
- *  - Every missed day lowers the limit by STEP (never below BASE) and restarts the 7-day count.
+ *  - Every counted day of the streak raises the weekly limit by STEP (BASE … MAX): 100, 110, … 300.
+ *  - Every missed day lowers the limit by STEP (never below BASE) and ends the streak.
  *  - A streak freeze (bought in the shop or given by a teacher) is used up automatically for a missed day:
  *    the streak and the limit stay as they were. At most MAX_FREEZES can be kept.
  *  - Days and weeks follow the school's time zone (UTC+5), weeks start on Monday.
@@ -14,8 +14,8 @@
 export const GAME_RULES = Object.freeze({
   BASE: 100,
   STEP: 10,
-  MAX: 500,
-  DAYS_PER_LEVEL: 7,
+  MAX: 300,
+  DAYS_PER_LEVEL: 1,
   MIN_DAILY_SCORE: 10,
   MAX_PER_GAME: 100,
   TZ_OFFSET_MIN: 300,
@@ -59,15 +59,19 @@ const isDay = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 /** Bring a stored ledger (or nothing) to the current shape */
 export function normalizeLedger(raw) {
   const gl = raw && typeof raw === 'object' ? raw : {};
+  const streak = num(gl.streak);
+  let level = num(gl.level, 0, MAX_LEVEL);
+  // v2 raised the limit once per 7 days: a running streak now counts every day
+  if (gl.v === 2) level = Math.max(level, Math.min(streak, MAX_LEVEL));
   return {
-    v: 2,
+    v: 3,
     week: typeof gl.week === 'string' ? gl.week : '',
     pts: num(gl.pts),
     day: isDay(gl.day) ? gl.day : '',
     dayScore: num(gl.dayScore),
     anchor: isDay(gl.anchor) ? gl.anchor : '',
-    streak: num(gl.streak),
-    level: num(gl.level, 0, MAX_LEVEL),
+    streak,
+    level,
     n: num(gl.n),
     freezes: num(gl.freezes, 0, GAME_RULES.MAX_FREEZES),
     frozen: Array.isArray(gl.frozen) ? gl.frozen.filter(isDay).slice(-10) : []
@@ -168,7 +172,7 @@ export function addFreeze(raw, now = new Date()) {
  * from the previous format ({ week, pts } + gameStats.dailyStreak / lastGameDate).
  */
 export function migrateLedger(oldLedger, gameStats, now = new Date()) {
-  if (oldLedger && oldLedger.v === 2) return normalizeLedger(oldLedger);
+  if (oldLedger && (oldLedger.v === 2 || oldLedger.v === 3)) return normalizeLedger(oldLedger);
   const today = schoolDay(now);
   const gl = normalizeLedger(null);
   gl.week = weekKeyOfDay(today);

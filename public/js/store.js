@@ -9,7 +9,7 @@ import { trackGameEnd } from './analytics.js';
 import { GAME_RULES, viewLedger, playGame, migrateLedger } from './shared/gameStreak.js';
 
 /** Titles earned in mini-games (never sold) */
-export const SECRET_TITLE_NAMES = ['знаток слов', 'знаток irregular', 'знаток conditional', 'архитектор условий', 'повелитель времён', 'гений времён', 'мастер предложений', 'повелитель предлогов', 'знаток phrasal verbs', 'грамматический детектив', 'спринтер слов', 'легенда мини-игр'];
+export const SECRET_TITLE_NAMES = ['Словарный ниндзя', 'Укротитель глаголов', 'Мастер «если бы»', 'Архитектор миров', 'Хранитель времени', 'Повелитель Rampage', 'Инженер предложений', 'Снайпер предлогов', 'Фразовый хакер', 'Грамматический детектив', 'Молния синонимов', 'Легенда Step Up'];
 
 /** Titles sold in the shop before teachers edit the list (then state.titlesCatalog is used) */
 export const DEFAULT_TITLES = [
@@ -32,6 +32,36 @@ import { logger } from './utils/logger.js';
 import { toast } from './components/toast.js';
 
 const LEGACY_STORAGE_KEYS = ['step_into_future_crm_v1', 'step_into_future_crm_v2', 'step_into_future_crm_v3', 'step_into_future_crm_v4', 'step_into_future_crm_v5', 'step_into_future_crm_v6'];
+
+/** Secret titles were renamed (November 2026): old name -> new name, applied to students' saved titles */
+const SECRET_TITLE_RENAMES = {
+  'знаток слов': 'Словарный ниндзя',
+  'знаток irregular': 'Укротитель глаголов',
+  'знаток conditional': 'Мастер «если бы»',
+  'архитектор условий': 'Архитектор миров',
+  'повелитель времён': 'Хранитель времени',
+  'гений времён': 'Повелитель Rampage',
+  'мастер предложений': 'Инженер предложений',
+  'повелитель предлогов': 'Снайпер предлогов',
+  'знаток phrasal verbs': 'Фразовый хакер',
+  'грамматический детектив': 'Грамматический детектив',
+  'спринтер слов': 'Молния синонимов',
+  'легенда мини-игр': 'Легенда Step Up'
+};
+
+/** Words for the word game when a student has no lesson words yet */
+const DEFAULT_GAME_WORDS = [
+  { word: 'Disappear', transcription: '[dɪsəˈpɪə]', translation: 'исчезать', example: 'She suddenly disappeared.' },
+  { word: 'Adventure', transcription: '[ədˈventʃə]', translation: 'приключение', example: 'They went on an exciting adventure.' },
+  { word: 'Challenge', transcription: '[ˈtʃælɪndʒ]', translation: 'вызов, испытание', example: 'It was a difficult challenge.' },
+  { word: 'Knowledge', transcription: '[ˈnɒlɪdʒ]', translation: 'знания', example: 'Knowledge is power.' },
+  { word: 'Celebrate', transcription: '[ˈselɪbreɪt]', translation: 'праздновать', example: 'We celebrate our victories.' },
+  { word: 'Imagine', transcription: '[ɪˈmædʒɪn]', translation: 'воображать', example: 'Imagine the possibilities.' },
+  { word: 'Discover', transcription: '[dɪˈskʌvə]', translation: 'открывать, исследовать', example: 'Scientists discover new planets.' },
+  { word: 'Protect', transcription: '[prəˈtekt]', translation: 'защищать', example: 'We must protect our planet.' },
+  { word: 'Improve', transcription: '[ɪmˈpruːv]', translation: 'улучшать', example: 'Practice helps improve your skills.' },
+  { word: 'Inspire', transcription: '[ɪnˈspaɪə]', translation: 'вдохновлять', example: 'Her stories inspire everyone.' }
+];
 
 function readSession() {
   try {
@@ -223,8 +253,28 @@ class Store {
     this.ensureVocabularyPoolSynced(result);
     this.applyMasteredWords(result);
     this.normalizeRecurringSchedule(result);
+    this.renameSecretTitles(result);
     this.recalculateBalances(result);
     return result;
+  }
+
+  /** Old secret title names -> current ones (unlocked lists, game stats and the title shown on the avatar) */
+  renameSecretTitles(target) {
+    const rename = (t) => (typeof t === 'string' && SECRET_TITLE_RENAMES[t]) || t;
+    const renameList = (list) => {
+      if (!Array.isArray(list) || !list.some(t => SECRET_TITLE_RENAMES[t] && SECRET_TITLE_RENAMES[t] !== t)) return list;
+      return [...new Set(list.map(rename))];
+    };
+    (target?.students || []).forEach(s => {
+      if (!s) return;
+      const titles = renameList(s.unlockedTitles);
+      if (titles !== s.unlockedTitles) { s.unlockedTitles = titles; this._titlesRenamed = true; }
+      if (s.gameStats) {
+        const secret = renameList(s.gameStats.unlockedSecretTitles);
+        if (secret !== s.gameStats.unlockedSecretTitles) { s.gameStats.unlockedSecretTitles = secret; this._titlesRenamed = true; }
+      }
+      if (rename(s.studentTitle) !== s.studentTitle) { s.studentTitle = rename(s.studentTitle); this._titlesRenamed = true; }
+    });
   }
 
   /** Balances = sum of point records - active purchases (same formula as the server ledger) */
@@ -337,6 +387,8 @@ class Store {
     try { this.removeGeneratedYearlyLessons(); } catch (e) { /* ignore */ }
     try { this.autoCompletePastLessons(); } catch (e) { /* ignore */ }
     try { this.normalizeAllGrades(); } catch (e) { /* ignore */ }
+    // Renamed secret titles are applied on load; a staff browser stores them on the server
+    if (this._titlesRenamed && this._serverSynced) { this._titlesRenamed = false; this.saveState(); }
     try { this.awardMonthlyLeaders(); } catch (e) { /* ignore */ }
     this._automationRunning = false;
   }
@@ -383,6 +435,17 @@ class Store {
       // Titles bought from the profile window were saved as 'Титул «name»': keep just the name
       if (Array.isArray(s.unlockedTitles) && s.unlockedTitles.some(t => /^Титул «.+»$/.test(t))) {
         s.unlockedTitles = [...new Set(s.unlockedTitles.map(t => t.replace(/^Титул «(.+)»$/, '$1')))];
+        changed = true;
+      }
+      if (typeof s.studentTitle === 'string' && /^Титул «.+»$/.test(s.studentTitle)) {
+        s.studentTitle = s.studentTitle.replace(/^Титул «(.+)»$/, '$1');
+        changed = true;
+      }
+    });
+    // Purchases from the profile window were named 'Титул «name»' / 'Рамка «name»' (the type is shown separately)
+    (this.state.purchases || []).forEach(p => {
+      if (p && typeof p.itemName === 'string' && /^(Титул|Рамка) «.+»$/.test(p.itemName)) {
+        p.itemName = p.itemName.replace(/^(?:Титул|Рамка) «(.+)»$/, '$1');
         changed = true;
       }
     });
@@ -1449,8 +1512,51 @@ class Store {
           }
         });
 
+        // Current textbook of a group that marks its lessons: only the words of lessons THIS group has
+        // conducted, read from the lesson plans. (The textbook-wide pool also holds lessons that another
+        // group on the same textbook has already had.)
+        const group = student.groupId ? (targetState.groups || []).find(gr => gr.id === student.groupId) : null;
+        const groupKeys = group && group.textbook && Array.isArray(group.conductedLessons) && group.conductedLessons.length
+          ? group.conductedLessons : null;
+        if (groupKeys) {
+          const tbName = group.textbook;
+          const allowed = new Map();
+          groupKeys.forEach(k => {
+            const [mNum, lNum] = String(k).split('-').map(Number);
+            const lesson = targetState.textbookLessons?.[tbName]?.[mNum]?.[lNum];
+            (lesson?.vocabulary || []).forEach(v => {
+              const clean = v && v.word ? v.word.trim() : '';
+              if (!clean || allowed.has(clean.toLowerCase())) return;
+              allowed.set(clean.toLowerCase(), {
+                id: `vocab-${student.id}-${tbName}-${mNum}-${lNum}-${clean.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+                word: clean,
+                transcription: (v.transcription || '').trim(),
+                translation: (v.translation || '').trim(),
+                example: (v.example || '').trim(),
+                textbook: tbName,
+                monthNumber: mNum,
+                lessonNumber: lNum,
+                conductedAt: lesson.conductedAt || fallbackDate,
+                dateAdded: lesson.conductedAt || fallbackDate,
+                isMastered: false
+              });
+            });
+          });
+          // Words a teacher added by hand (addCustomWordToPool) stay available too
+          (targetState.textbookVocabularyPool[tbName] || []).forEach(w => {
+            if (w && w.word && String(w.id || '').includes('-custom-') && !allowed.has(w.word.toLowerCase().trim())) {
+              allowed.set(w.word.toLowerCase().trim(), { ...w, id: `vocab-${student.id}-${w.id}`, isMastered: false });
+            }
+          });
+          const kept = (student.vocabularyPool[tbName] || []).filter(w => w && w.word && allowed.has(w.word.toLowerCase().trim()));
+          const keptKeys = new Set(kept.map(w => w.word.toLowerCase().trim()));
+          allowed.forEach((w, k) => { if (!keptKeys.has(k)) kept.push(w); });
+          student.vocabularyPool[tbName] = kept;
+        }
+
         // Ensure words from conducted lessons of these textbooks are in student's pool
         student.textbooksStudied.forEach(tbName => {
+          if (groupKeys && tbName === group.textbook) return;
           if (!student.vocabularyPool[tbName]) student.vocabularyPool[tbName] = [];
           const tbWords = targetState.textbookVocabularyPool[tbName] || [];
 
@@ -1501,11 +1607,14 @@ class Store {
 
     let allWords = [];
     let masteredCount = 0;
+    const group = student.groupId ? this.getGroupById(student.groupId) : null;
+    const groupTracksLessons = Boolean(group && group.textbook && (group.conductedLessons || []).length);
 
     allTextbookKeys.forEach(tb => {
       let words = pool[tb] || [];
       // Fallback: if student pool for this textbook was empty but textbook has words
-      if (words.length === 0 && this.state.textbookVocabularyPool && this.state.textbookVocabularyPool[tb]) {
+      // (not for the textbook of a group that marks its lessons: those words are not reached yet)
+      if (words.length === 0 && !(groupTracksLessons && tb === group.textbook) && this.state.textbookVocabularyPool && this.state.textbookVocabularyPool[tb]) {
         words = this.state.textbookVocabularyPool[tb].map(w => ({
           ...w,
           id: `vocab-${student.id}-${w.id}`,
@@ -4229,7 +4338,7 @@ class Store {
 
   /** Server ledger, or the local preview of games the server has not confirmed yet */
   effectiveGameLedger(student) {
-    const server = student.gameLedger && student.gameLedger.v === 2 ? student.gameLedger : migrateLedger(student.gameLedger, student.gameStats);
+    const server = migrateLedger(student.gameLedger, student.gameStats);
     const local = this._gameOverlay.get(student.id);
     if (local && local.n > (server.n || 0)) return local;
     if (local) this._gameOverlay.delete(student.id);
@@ -4272,9 +4381,9 @@ class Store {
       if (score === total && total >= 10) {
         student.gameStats.wordsStreak = (student.gameStats.wordsStreak || 0) + 1;
         if (student.gameStats.wordsStreak >= 3) {
-          const unlocked = this.unlockSecretTitle(studentId, 'знаток слов');
+          const unlocked = this.unlockSecretTitle(studentId, 'Словарный ниндзя');
           if (unlocked) {
-            newTitleUnlocked = 'знаток слов';
+            newTitleUnlocked = 'Словарный ниндзя';
           }
         }
       } else {
@@ -4284,9 +4393,9 @@ class Store {
       if (score === total && total >= 10) {
         student.gameStats.irregularStreak = (student.gameStats.irregularStreak || 0) + 1;
         if (student.gameStats.irregularStreak >= 3) {
-          const unlocked = this.unlockSecretTitle(studentId, 'знаток irregular');
+          const unlocked = this.unlockSecretTitle(studentId, 'Укротитель глаголов');
           if (unlocked) {
-            newTitleUnlocked = 'знаток irregular';
+            newTitleUnlocked = 'Укротитель глаголов';
           }
         }
       } else {
@@ -4300,9 +4409,9 @@ class Store {
       if (score === total && total >= 10) {
         student.gameStats.conditionalStreak = (student.gameStats.conditionalStreak || 0) + 1;
         if (student.gameStats.conditionalStreak >= 3) {
-          const unlocked = this.unlockSecretTitle(studentId, 'знаток conditional');
+          const unlocked = this.unlockSecretTitle(studentId, 'Мастер «если бы»');
           if (unlocked) {
-            newTitleUnlocked = 'знаток conditional';
+            newTitleUnlocked = 'Мастер «если бы»';
           }
         }
         if (meta.mode) {
@@ -4313,9 +4422,9 @@ class Store {
             student.gameStats.conditionalModesCompleted.push(meta.mode);
           }
           if (['type1', 'type2', 'type3', 'mixed'].every(m => student.gameStats.conditionalModesCompleted.includes(m))) {
-            const unlockedArch = this.unlockSecretTitle(studentId, 'архитектор условий');
+            const unlockedArch = this.unlockSecretTitle(studentId, 'Архитектор миров');
             if (unlockedArch) {
-              newTitleUnlocked = newTitleUnlocked || 'архитектор условий';
+              newTitleUnlocked = newTitleUnlocked || 'Архитектор миров';
             }
           }
         }
@@ -4331,9 +4440,9 @@ class Store {
       if (score === total && total >= 10) {
         student.gameStats.tensesStreak = (student.gameStats.tensesStreak || 0) + 1;
         if (student.gameStats.tensesStreak >= 3) {
-          const unlocked = this.unlockSecretTitle(studentId, 'повелитель времён');
+          const unlocked = this.unlockSecretTitle(studentId, 'Хранитель времени');
           if (unlocked) {
-            newTitleUnlocked = 'повелитель времён';
+            newTitleUnlocked = 'Хранитель времени';
           }
         }
       } else {
@@ -4349,9 +4458,9 @@ class Store {
           }
         }
         if (currentLevel === 'rampage') {
-          const unlocked = this.unlockSecretTitle(studentId, 'гений времён');
+          const unlocked = this.unlockSecretTitle(studentId, 'Повелитель Rampage');
           if (unlocked) {
-            newTitleUnlocked = newTitleUnlocked || 'гений времён';
+            newTitleUnlocked = newTitleUnlocked || 'Повелитель Rampage';
           }
         }
       }
@@ -4359,9 +4468,9 @@ class Store {
       if (score === total && total >= 10) {
         student.gameStats.builderStreak = (student.gameStats.builderStreak || 0) + 1;
         if (student.gameStats.builderStreak >= 3) {
-          const unlocked = this.unlockSecretTitle(studentId, 'мастер предложений');
+          const unlocked = this.unlockSecretTitle(studentId, 'Инженер предложений');
           if (unlocked) {
-            newTitleUnlocked = 'мастер предложений';
+            newTitleUnlocked = 'Инженер предложений';
           }
         }
       } else {
@@ -4371,9 +4480,9 @@ class Store {
       if (score === total && total >= 10) {
         student.gameStats.prepositionsStreak = (student.gameStats.prepositionsStreak || 0) + 1;
         if (student.gameStats.prepositionsStreak >= 3) {
-          const unlocked = this.unlockSecretTitle(studentId, 'повелитель предлогов');
+          const unlocked = this.unlockSecretTitle(studentId, 'Снайпер предлогов');
           if (unlocked) {
-            newTitleUnlocked = 'повелитель предлогов';
+            newTitleUnlocked = 'Снайпер предлогов';
           }
         }
       } else {
@@ -4383,9 +4492,9 @@ class Store {
       if (score === total && total >= 10) {
         student.gameStats.phrasalStreak = (student.gameStats.phrasalStreak || 0) + 1;
         if (student.gameStats.phrasalStreak >= 3) {
-          const unlocked = this.unlockSecretTitle(studentId, 'знаток phrasal verbs');
+          const unlocked = this.unlockSecretTitle(studentId, 'Фразовый хакер');
           if (unlocked) {
-            newTitleUnlocked = 'знаток phrasal verbs';
+            newTitleUnlocked = 'Фразовый хакер';
           }
         }
       } else {
@@ -4395,9 +4504,9 @@ class Store {
       if (score === total && total >= 10) {
         student.gameStats.mistakesStreak = (student.gameStats.mistakesStreak || 0) + 1;
         if (student.gameStats.mistakesStreak >= 3) {
-          const unlocked = this.unlockSecretTitle(studentId, 'грамматический детектив');
+          const unlocked = this.unlockSecretTitle(studentId, 'Грамматический детектив');
           if (unlocked) {
-            newTitleUnlocked = 'грамматический детектив';
+            newTitleUnlocked = 'Грамматический детектив';
           }
         }
       } else {
@@ -4407,9 +4516,9 @@ class Store {
       if (score === total && total >= 10) {
         student.gameStats.synonymsStreak = (student.gameStats.synonymsStreak || 0) + 1;
         if (student.gameStats.synonymsStreak >= 3) {
-          const unlocked = this.unlockSecretTitle(studentId, 'спринтер слов');
+          const unlocked = this.unlockSecretTitle(studentId, 'Молния синонимов');
           if (unlocked) {
-            newTitleUnlocked = 'спринтер слов';
+            newTitleUnlocked = 'Молния синонимов';
           }
         }
       } else {
@@ -4417,13 +4526,13 @@ class Store {
       }
     }
 
-    // Meta check: Unlocking 5 secret titles awards "легенда мини-игр"
-    const SECRET_NAMES = ['знаток слов', 'знаток irregular', 'знаток conditional', 'архитектор условий', 'повелитель времён', 'гений времён', 'мастер предложений', 'повелитель предлогов', 'знаток phrasal verbs', 'грамматический детектив', 'спринтер слов'];
+    // Meta check: Unlocking 5 secret titles awards "Легенда Step Up"
+    const SECRET_NAMES = ['Словарный ниндзя', 'Укротитель глаголов', 'Мастер «если бы»', 'Архитектор миров', 'Хранитель времени', 'Повелитель Rampage', 'Инженер предложений', 'Снайпер предлогов', 'Фразовый хакер', 'Грамматический детектив', 'Молния синонимов'];
     const secretCount = Array.isArray(student.unlockedTitles) ? student.unlockedTitles.filter(t => SECRET_NAMES.includes(t)).length : 0;
     if (secretCount >= 5) {
-      const unlockedLegend = this.unlockSecretTitle(studentId, 'легенда мини-игр');
+      const unlockedLegend = this.unlockSecretTitle(studentId, 'Легенда Step Up');
       if (unlockedLegend) {
-        newTitleUnlocked = newTitleUnlocked || 'легенда мини-игр';
+        newTitleUnlocked = newTitleUnlocked || 'Легенда Step Up';
       }
     }
 
@@ -4446,85 +4555,115 @@ class Store {
     };
   }
 
-  getPrioritizedVocabularyForGame(studentId, targetCount = 10) {
-    const poolData = this.getStudentVocabularyPool(studentId);
-    let allWords = [...(poolData?.allWords || [])];
+  /**
+   * Word game cycle for one lesson (the latest lesson of the student's own group that has words):
+   *   1. 'new'      — the new words of that lesson (several rounds when there are more than 10),
+   *   2. 'mistakes' — the words answered wrong during step 1 (skipped when there were none),
+   *   3. 'check'    — the new words once more,
+   *   4. 'mix'      — about half new words, the rest older words, the most often missed first.
+   * A new conducted lesson starts the cycle again. Rounds are filled up to `count` with older words.
+   * State lives in student.wordGame: { lessonKey, phase, pos, wrong: [word], errs: { word: misses } }.
+   */
+  getWordGameRound(studentId, count = 10) {
+    const student = this.getStudentById(studentId);
+    const keyOf = (w) => String(w.word).toLowerCase().trim();
+    const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
+    const seen = new Set();
+    const words = (this.getStudentVocabularyPool(studentId).allWords || [])
+      .filter(w => w && w.word && w.word.trim() && w.translation && w.translation.trim())
+      .filter(w => { const k = keyOf(w); if (seen.has(k)) return false; seen.add(k); return true; });
 
-    // Filter out invalid/empty items
-    allWords = allWords.filter(w => w && w.word && w.word.trim() && w.translation && w.translation.trim());
+    const group = student?.groupId ? this.getGroupById(student.groupId) : null;
+    const currentTb = group?.textbook || student?.textbook || '';
+    const order = (w) => (Number(w.monthNumber) || 0) * 100 + (Number(w.lessonNumber) || 0);
+    const lessonWords = words.filter(w => order(w) > 0 && (!currentTb || w.textbook === currentTb));
+    const latest = lessonWords.reduce((max, w) => Math.max(max, order(w)), 0);
+    const fresh = latest ? lessonWords.filter(w => order(w) === latest) : [];
+    const freshKeys = new Set(fresh.map(keyOf));
+    const old = words.filter(w => !freshKeys.has(keyOf(w)));
+    const lessonKey = latest ? `${currentTb}|${Math.floor(latest / 100)}-${latest % 100}` : '';
 
-    // Fallback 1: global textbook vocabulary pool if student pool is too small
-    if (allWords.length < targetCount && this.state.textbookVocabularyPool) {
-      for (const tbWords of Object.values(this.state.textbookVocabularyPool)) {
-        if (Array.isArray(tbWords)) {
-          tbWords.forEach(w => {
-            if (w && w.word && w.translation && !allWords.some(x => x.word.toLowerCase() === w.word.toLowerCase())) {
-              allWords.push({ ...w });
-            }
-          });
-        }
-      }
+    const st = this.wordGameState(student, lessonKey);
+    const phase = fresh.length ? st.phase : 'mix';
+    const chunk = (list) => list.slice(st.pos * count, st.pos * count + count);
+    let picked;
+    if (phase === 'new' || phase === 'check') picked = chunk(fresh);
+    else if (phase === 'mistakes') picked = chunk(words.filter(w => st.wrong.includes(keyOf(w))));
+    else picked = shuffle(fresh).slice(0, Math.ceil(count / 2));
+
+    const missed = (w) => st.errs[keyOf(w)] || 0;
+    const fill = [...shuffle(old.filter(missed)).sort((a, b) => missed(b) - missed(a)), ...shuffle(old.filter(w => !missed(w))), ...shuffle(fresh)];
+    for (const w of fill) {
+      if (picked.length >= count) break;
+      if (!picked.some(p => keyOf(p) === keyOf(w))) picked.push(w);
     }
+    if (!picked.length) picked = DEFAULT_GAME_WORDS.slice(0, count);
 
-    // Fallback 2: seed vocabulary pairs if system has very few words
-    const defaultPairs = [
-      { word: 'Disappear', transcription: '[dɪsəˈpɪə]', translation: 'исчезать', example: 'She suddenly disappeared.' },
-      { word: 'Adventure', transcription: '[ədˈventʃə]', translation: 'приключение', example: 'They went on an exciting adventure.' },
-      { word: 'Challenge', transcription: '[ˈtʃælɪndʒ]', translation: 'вызов, испытание', example: 'It was a difficult challenge.' },
-      { word: 'Knowledge', transcription: '[ˈnɒlɪdʒ]', translation: 'знания', example: 'Knowledge is power.' },
-      { word: 'Celebrate', transcription: '[ˈselɪbreɪt]', translation: 'праздновать', example: 'We celebrate our victories.' },
-      { word: 'Imagine', transcription: '[ɪˈmædʒɪn]', translation: 'воображать', example: 'Imagine the possibilities.' },
-      { word: 'Discover', transcription: '[dɪˈskʌvə]', translation: 'открывать, исследовать', example: 'Scientists discover new planets.' },
-      { word: 'Protect', transcription: '[prəˈtekt]', translation: 'защищать', example: 'We must protect our planet.' },
-      { word: 'Improve', transcription: '[ɪmˈpruːv]', translation: 'улучшать', example: 'Practice helps improve your skills.' },
-      { word: 'Inspire', transcription: '[ɪnˈspaɪə]', translation: 'вдохновлять', example: 'Her stories inspire everyone.' }
-    ];
+    const m = Math.floor(latest / 100);
+    const l = latest % 100;
+    return {
+      words: shuffle(picked),
+      phase,
+      lessonKey,
+      newCount: fresh.length,
+      lessonLabel: latest ? `${m}.${l}` : '',
+      title: {
+        new: 'Новые слова урока',
+        mistakes: 'Работа над ошибками',
+        check: 'Проверка новых слов',
+        mix: 'Повторение: новые и старые слова'
+      }[phase]
+    };
+  }
 
-    defaultPairs.forEach(dp => {
-      if (allWords.length < targetCount && !allWords.some(x => x.word.toLowerCase() === dp.word.toLowerCase())) {
-        allWords.push({ ...dp });
+  /** student.wordGame for the given lesson (a different lesson starts the cycle again; misses are kept) */
+  wordGameState(student, lessonKey) {
+    const raw = student?.wordGame && typeof student.wordGame === 'object' ? student.wordGame : {};
+    const errs = raw.errs && typeof raw.errs === 'object' ? { ...raw.errs } : {};
+    if (raw.lessonKey !== lessonKey) return { lessonKey, phase: 'new', pos: 0, wrong: [], errs };
+    return {
+      lessonKey,
+      phase: ['new', 'mistakes', 'check', 'mix'].includes(raw.phase) ? raw.phase : 'new',
+      pos: Math.max(0, Number(raw.pos) || 0),
+      wrong: Array.isArray(raw.wrong) ? raw.wrong.slice(0, 60) : [],
+      errs
+    };
+  }
+
+  /** Save a finished word round: per-word misses and the next step of the cycle */
+  recordWordGameRound(studentId, round, answers, count = 10) {
+    const student = this.getStudentById(studentId);
+    if (!student || !round) return;
+    const st = this.wordGameState(student, round.lessonKey);
+    const wrongNow = [];
+    answers.forEach(a => {
+      const k = String(a.word || '').toLowerCase().trim();
+      if (!k) return;
+      if (a.isCorrect) {
+        if (st.errs[k] > 1) st.errs[k] -= 1; else delete st.errs[k];
+      } else {
+        st.errs[k] = (st.errs[k] || 0) + 1;
+        wrongNow.push(k);
       }
     });
+    // Keep the student row small: only the 60 most missed words
+    st.errs = Object.fromEntries(Object.entries(st.errs).sort((a, b) => b[1] - a[1]).slice(0, 60));
 
-    // Determine the latest conducted lesson words
-    const wordsWithLesson = allWords.filter(w => w.monthNumber && w.lessonNumber);
-    let latestLessonWords = [];
-    let otherWords = [];
-
-    if (wordsWithLesson.length > 0) {
-      wordsWithLesson.sort((a, b) => {
-        if (b.monthNumber !== a.monthNumber) return b.monthNumber - a.monthNumber;
-        return b.lessonNumber - a.lessonNumber;
-      });
-
-      const maxMonth = wordsWithLesson[0].monthNumber;
-      const maxLesson = wordsWithLesson[0].lessonNumber;
-
-      latestLessonWords = wordsWithLesson.filter(w => w.monthNumber === maxMonth && w.lessonNumber === maxLesson);
-      otherWords = allWords.filter(w => !(w.monthNumber === maxMonth && w.lessonNumber === maxLesson));
-    } else {
-      otherWords = allWords;
-    }
-
-    // Shuffle helper
-    const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
-
-    // Pick from latest lesson first
-    let selected = shuffle(latestLessonWords);
-
-    // Backfill with other words if under targetCount
-    if (selected.length < targetCount) {
-      const remainingNeeded = targetCount - selected.length;
-      const shuffledOthers = shuffle(otherWords);
-      for (const w of shuffledOthers) {
-        if (!selected.some(x => x.word.toLowerCase() === w.word.toLowerCase())) {
-          selected.push(w);
-          if (selected.length >= targetCount) break;
-        }
+    if (round.newCount && round.phase === st.phase) {
+      st.pos += 1;
+      if (st.phase === 'new') {
+        st.wrong = [...new Set([...st.wrong, ...wrongNow])].slice(0, 60);
+        if (st.pos * count >= round.newCount) { st.phase = st.wrong.length ? 'mistakes' : 'check'; st.pos = 0; }
+      } else if (st.phase === 'mistakes') {
+        if (st.pos * count >= st.wrong.length) { st.phase = 'check'; st.pos = 0; st.wrong = []; }
+      } else if (st.phase === 'check') {
+        if (st.pos * count >= round.newCount) { st.phase = 'mix'; st.pos = 0; }
+      } else {
+        st.pos = 0;
       }
     }
-
-    return selected.slice(0, targetCount);
+    student.wordGame = st;
+    this.saveState();
   }
 
   // --- Shop & Staff Goods Management ---
@@ -4783,9 +4922,10 @@ class Store {
           student.avatarFrame = 'frame-none';
         }
       } else if (purchase.type === 'title') {
-        const val = purchase.itemName;
-        student.unlockedTitles = (student.unlockedTitles || []).filter(t => t !== val);
-        if (student.studentTitle === val) {
+        // The unlocked title is stored by its text (= itemId); old records named it 'Титул «…»'
+        const names = new Set([purchase.itemId, purchase.itemName, String(purchase.itemName || '').replace(/^Титул «(.+)»$/, '$1')].filter(Boolean));
+        student.unlockedTitles = (student.unlockedTitles || []).filter(t => !names.has(t));
+        if (names.has(student.studentTitle)) {
           student.studentTitle = '';
         }
       }
