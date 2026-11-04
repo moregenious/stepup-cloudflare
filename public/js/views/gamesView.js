@@ -27,18 +27,22 @@ import { PREPOSITIONS_DATA } from '../data/prepositionsData.js';
 import { PHRASAL_VERBS_DATA } from '../data/phrasalVerbsData.js';
 import { FIND_MISTAKE_DATA } from '../data/findMistakeData.js';
 import { SYNONYMS_ANTONYMS_DATA } from '../data/synonymsAntonymsData.js';
+import { COLORS_DATA, ANIMALS_DATA } from '../data/pictureGamesData.js';
 
 /** Games on the choice page (key = GamesView.activeTab, streakKey = field of the game progress) */
+// Easy games first (the youngest find them at once), sentence building and conditionals last
 const GAMES = [
-  { key: 'words', icon: '🔤', name: 'Слова', desc: 'Новые слова с урока и повторение старых', streakKey: 'wordsStreak' },
+  { key: 'colors', icon: '🎨', name: 'Цвета', desc: 'Узнай цвет по-английски', streakKey: 'colorsStreak', easy: true },
+  { key: 'animals', icon: '🦁', name: 'Животные', desc: 'Найди животное по картинке', streakKey: 'animalsStreak', easy: true },
+  { key: 'words', icon: '🔤', name: 'Слова', desc: 'Новые слова с урока и повторение старых', streakKey: 'wordsStreak', easy: true },
   { key: 'irregular', icon: '⚡', name: 'Глаголы V1–V3', desc: 'Неправильные глаголы: три формы', streakKey: 'irregularStreak' },
-  { key: 'conditionals', icon: '⚖️', name: 'Conditionals', desc: 'Условные предложения 1, 2, 3 и смешанные', streakKey: 'conditionalStreak' },
-  { key: 'tenses', icon: '⏱️', name: 'Времена', desc: 'Определи время глагола — от лёгкого до Rampage', streakKey: 'tensesStreak' },
-  { key: 'builder', icon: '🧩', name: 'Конструктор', desc: 'Собери предложение из слов', streakKey: 'builderStreak' },
+  { key: 'synonyms', icon: '⚡', name: 'Синонимы и антонимы', desc: 'Блиц на время: 15 секунд на ответ', streakKey: 'synonymsStreak' },
   { key: 'prepositions', icon: '🎯', name: 'Предлоги', desc: 'Выбери правильный предлог', streakKey: 'prepositionsStreak' },
   { key: 'phrasal', icon: '🚀', name: 'Фразовые глаголы', desc: 'Значения фразовых глаголов в контексте', streakKey: 'phrasalStreak' },
   { key: 'mistakes', icon: '🕵️', name: 'Найди ошибку', desc: 'Найди и исправь ошибку в предложении', streakKey: 'mistakesStreak' },
-  { key: 'synonyms', icon: '⚡', name: 'Синонимы и антонимы', desc: 'Блиц на время: 15 секунд на ответ', streakKey: 'synonymsStreak' }
+  { key: 'tenses', icon: '⏱️', name: 'Времена', desc: 'Определи время глагола — от лёгкого до Rampage', streakKey: 'tensesStreak' },
+  { key: 'builder', icon: '🧩', name: 'Конструктор', desc: 'Собери предложение из слов', streakKey: 'builderStreak' },
+  { key: 'conditionals', icon: '⚖️', name: 'Conditionals', desc: 'Условные предложения 1, 2, 3 и смешанные', streakKey: 'conditionalStreak' }
 ];
 
 // Opening the "Mini-games" tab always starts on the game choice page
@@ -175,6 +179,8 @@ export const GamesView = {
           <div style="display: flex; gap: 8px; margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid rgba(255, 255, 255, 0.15); flex-wrap: wrap; align-items: center;">
             <div style="font-size: 0.75rem; color: #c7d2fe; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
               <span title="Серии побед 10/10 подряд">🔥 Серии:</span>
+              <span style="background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 6px;" title="Цвета">🎨 ${progress.colorsStreak || 0}/3</span>
+              <span style="background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 6px;" title="Животные">🦁 ${progress.animalsStreak || 0}/3</span>
               <span style="background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 6px;" title="Слова">🔤 ${progress.wordsStreak || 0}/3</span>
               <span style="background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 6px;" title="Неправильные глаголы">⚡ ${progress.irregularStreak || 0}/3</span>
               <span style="background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 6px;" title="Условные предложения">⚖️ ${progress.conditionalStreak || 0}/3</span>
@@ -208,7 +214,7 @@ export const GamesView = {
             <button type="button" class="games-choice-card tab-game-btn" data-game="${g.key}">
               <span class="games-choice-icon">${g.icon}</span>
               <span class="games-choice-text">
-                <span class="games-choice-name">${g.name}</span>
+                <span class="games-choice-name">${g.name}${g.easy ? ' <span class="games-choice-easy">легко</span>' : ''}</span>
                 <span class="games-choice-desc">${g.desc}</span>
               </span>
               ${isStudent ? `<span class="games-choice-streak" title="Побед 10/10 подряд для секретного титула">🔥 ${progress[g.streakKey] || 0}/3</span>` : ''}
@@ -250,7 +256,9 @@ export const GamesView = {
     const mount = container.querySelector('#active-game-mount');
     if (!mount) return;
 
-    if (this.activeTab === 'words') {
+    if (this.activeTab === 'colors' || this.activeTab === 'animals') {
+      this.renderPictureGame(mount, studentId, this.activeTab);
+    } else if (this.activeTab === 'words') {
       this.renderWordsGame(mount, studentId);
     } else if (this.activeTab === 'irregular') {
       this.renderIrregularGame(mount, studentId);
@@ -607,6 +615,123 @@ export const GamesView = {
           modal.close();
           this.initWordsRound(studentId);
           this.render(mount.closest('.games-view-container').parentElement);
+        });
+      }
+    });
+  },
+
+  // =========================================================================
+  // Picture quizzes for the youngest: 'colors' and 'animals'.
+  // Half of the questions show the picture (pick the word), half show the word (pick the picture).
+  // =========================================================================
+
+  initPictureRound(kind) {
+    const data = kind === 'colors' ? COLORS_DATA : ANIMALS_DATA;
+    const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
+    const picked = shuffle(data).slice(0, 10);
+    const questions = picked.map((item, idx) => ({
+      item,
+      mode: idx % 2 === 0 ? 'see' : 'find', // see: picture -> word, find: word -> picture
+      options: shuffle([item, ...shuffle(data.filter(d => d.word !== item.word)).slice(0, 3)]),
+      answer: null
+    }));
+    this.pictureState = { kind, questions: shuffle(questions), currentIndex: 0, score: 0, isFinished: false };
+  },
+
+  pictureHtml(kind, item, size) {
+    if (kind === 'colors') {
+      // The colour goes through a custom property: the dark theme repaints inline light backgrounds
+      // (style="background:#ffffff"), which turned the white swatch dark
+      const border = item.word === 'white' ? 'border: 2px solid #cbd5e1;' : '';
+      return `<span class="picture-swatch" style="width:${size}px; height:${size}px; --swatch:${item.color}; ${border}"></span>`;
+    }
+    return `<span class="picture-emoji" style="font-size:${Math.round(size * 0.8)}px;">${item.emoji}</span>`;
+  },
+
+  renderPictureGame(mount, studentId, kind) {
+    if (!this.pictureState || this.pictureState.kind !== kind || this.pictureState.isFinished) this.initPictureRound(kind);
+    const state = this.pictureState;
+    const q = state.questions[state.currentIndex];
+    const total = state.questions.length;
+    const prompt = q.mode === 'see'
+      ? (kind === 'colors' ? 'What colour is it? Какой это цвет?' : 'Who is it? Кто это?')
+      : `Find: <strong>${q.item.word}</strong>`;
+
+    mount.innerHTML = `
+      <div class="card game-play-card" style="padding: var(--space-5); border: 2px solid var(--color-primary);">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom: var(--space-3);">
+          <div style="font-weight:800; color: var(--color-primary);">${kind === 'colors' ? '🎨 Цвета' : '🦁 Животные'}</div>
+          <div style="background:#e0f2fe; color:#0369a1; padding:4px 12px; border-radius: var(--radius-full); font-weight:800; font-size:0.85rem;">Вопрос ${state.currentIndex + 1} из ${total} • Счёт: ${state.score}</div>
+        </div>
+        <div class="picture-question">
+          ${q.mode === 'see' ? this.pictureHtml(kind, q.item, 120) : `<div class="picture-word">${q.item.word}</div>`}
+          <div class="picture-prompt">${prompt}</div>
+        </div>
+        <div class="picture-options ${q.mode === 'find' ? 'is-pictures' : ''}">
+          ${q.options.map(o => `
+            <button type="button" class="picture-option" data-word="${o.word}">
+              ${q.mode === 'find' ? this.pictureHtml(kind, o, 64) : `<span>${o.word}</span>`}
+            </button>
+          `).join('')}
+        </div>
+        <div class="picture-feedback" id="picture-feedback"></div>
+        <button type="button" class="btn btn-primary" id="btn-picture-next" style="display:none; width:100%; margin-top: var(--space-3);">
+          ${state.currentIndex + 1 === total ? 'Завершить игру ➔' : 'Дальше ➔'}
+        </button>
+      </div>
+    `;
+
+    mount.querySelectorAll('.picture-option').forEach(btn => btn.addEventListener('click', () => {
+      if (q.answer) return;
+      q.answer = btn.dataset.word;
+      const correct = q.answer === q.item.word;
+      if (correct) state.score++;
+      btn.classList.add(correct ? 'is-correct' : 'is-wrong');
+      if (!correct) mount.querySelector(`.picture-option[data-word="${q.item.word}"]`)?.classList.add('is-correct');
+      mount.querySelector('#picture-feedback').innerHTML = correct
+        ? `✅ Верно! <strong>${q.item.word}</strong> — ${q.item.translation}`
+        : `❌ Правильно: <strong>${q.item.word}</strong> — ${q.item.translation}`;
+      const next = mount.querySelector('#btn-picture-next');
+      next.style.display = '';
+      next.addEventListener('click', () => {
+        if (state.currentIndex + 1 < total) {
+          state.currentIndex++;
+          this.renderPictureGame(mount, studentId, kind);
+        } else {
+          this.finishPictureGame(mount, studentId, kind);
+        }
+      });
+    }));
+  },
+
+  finishPictureGame(mount, studentId, kind) {
+    const state = this.pictureState;
+    state.isFinished = true;
+    const title = kind === 'colors' ? 'Цвета' : 'Животные';
+    const isStudent = auth.isStudent();
+    const award = isStudent && studentId ? store.awardGamePoints(studentId, state.score, kind, title) : null;
+    const result = isStudent && studentId ? store.recordGameResult(studentId, kind, state.score, 10) : { currentStreak: 0 };
+
+    modal.open({
+      title: state.score === 10 ? '🎯 10 из 10! Отлично!' : 'Раунд завершён!',
+      bodyHtml: `
+        <div style="text-align:center; padding: var(--space-4);">
+          <div style="font-size: 2.5rem;">${state.score === 10 ? '🎉' : kind === 'colors' ? '🎨' : '🦁'}</div>
+          <h3 style="font-size:1.3rem; color: var(--color-primary); margin: 6px 0;">Твой результат: ${state.score} из 10</h3>
+          ${award ? `
+            <div style="background: var(--color-bg-app); padding: var(--space-3); border-radius: var(--radius-lg); border:1px solid var(--color-border); max-width:320px; margin: var(--space-3) auto;">
+              <div style="font-size:1.5rem; font-weight:800; color:#f59e0b;">+${award.pointsAwarded} ⭐</div>
+              <div style="font-size: var(--font-size-xs); color: var(--color-text-muted);">Лимит недели: ${award.weeklyTotal} / ${award.weeklyLimit || 100} ⭐</div>
+            </div>
+            <div style="font-size: var(--font-size-sm); color:#0284c7; font-weight:700;">Серия побед 10/10 подряд: ${result.currentStreak || 0} из 3</div>
+          ` : ''}
+        </div>`,
+      footerHtml: `<button type="button" class="btn btn-primary" id="btn-picture-again" style="width:100%;">🔄 Играть ещё раз</button>`,
+      onOpen: () => {
+        document.getElementById('btn-picture-again')?.addEventListener('click', () => {
+          modal.close();
+          this.initPictureRound(kind);
+          this.renderPictureGame(mount, studentId, kind);
         });
       }
     });

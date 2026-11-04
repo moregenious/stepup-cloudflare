@@ -285,7 +285,7 @@ export const StudentCabinet = {
     }
     if (isPreview) this.previewStudentId = student.id;
 
-    // Check Birthday Bonus (+500 points on birthday)
+    // Check Birthday Bonus (+200 points, also within 14 days after it)
     const bdayCheck = isPreview ? null : store.checkAndAwardBirthdayBonus(student.id);
     if (bdayCheck && bdayCheck.awarded) {
       setTimeout(() => {
@@ -302,7 +302,7 @@ export const StudentCabinet = {
               </p>
               <div style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(245, 158, 11, 0.25)); border: 2px dashed #f59e0b; border-radius: var(--radius-lg); padding: 16px; margin: 16px 0;">
                 <div style="font-size: 0.85rem; color: #b45309; font-weight: 700; text-transform: uppercase;">Твой праздничный подарок:</div>
-                <div style="font-size: 2.2rem; font-weight: 900; color: #d97706; margin-top: 4px;">+500 ⭐</div>
+                <div style="font-size: 2.2rem; font-weight: 900; color: #d97706; margin-top: 4px;">+${bdayCheck.points || 200} ⭐</div>
                 <div style="font-size: 0.82rem; color: var(--color-text-muted); margin-top: 4px;">Баллы зачислены на баланс для покупок в магазине (без рейтинга)!</div>
               </div>
             </div>
@@ -334,7 +334,11 @@ export const StudentCabinet = {
 
     // Current academic month & payment warning status
     const currentAcademicMonth = store.getCurrentAcademicMonth();
-    const isPaymentWarning = store.isPaymentDueWarningActive(student.id, currentAcademicMonth.key);
+    const paymentDue = store.getStudentPaymentDue(student.id);
+    const isPaymentWarning = Boolean(paymentDue.debtMonth) || paymentDue.currentUnpaid;
+    const currentMonthName = currentAcademicMonth.shortName || currentAcademicMonth.name;
+    const debtMonthName = paymentDue.debtMonth ? (paymentDue.debtMonth.shortName || paymentDue.debtMonth.name) : '';
+    const toPrepositional = (m) => ({ 'Январь': 'январь', 'Февраль': 'февраль', 'Март': 'март', 'Апрель': 'апрель', 'Май': 'май', 'Июнь': 'июнь', 'Сентябрь': 'сентябрь', 'Октябрь': 'октябрь', 'Ноябрь': 'ноябрь', 'Декабрь': 'декабрь' }[m] || m);
 
     // Attendance stats
     const attStats = store.getStudentAttendanceStats(student.id);
@@ -372,11 +376,11 @@ export const StudentCabinet = {
             <span style="font-size: 2.2rem;">🎂</span>
             <div>
               <div style="font-weight: 800; font-size: 1.15rem;">С Днём Рождения, ${student.fullName.split(' ')[0]}! 🎉</div>
-              <div style="font-size: 0.85rem; opacity: 0.95; margin-top: 2px;">Step Up English поздравляет тебя! В честь твоего праздника начислен подарок +500 ⭐ баллов для магазина бонусов!</div>
+              <div style="font-size: 0.85rem; opacity: 0.95; margin-top: 2px;">Step Up English поздравляет тебя! В честь твоего праздника начислен подарок +200 ⭐ баллов для магазина бонусов!</div>
             </div>
           </div>
           <div style="font-size: 1.3rem; font-weight: 900; background: rgba(255,255,255,0.25); padding: 6px 14px; border-radius: var(--radius-lg); white-space: nowrap;">
-            +500 ⭐ 🎁
+            +200 ⭐ 🎁
           </div>
         </div>
       ` : ''}
@@ -389,17 +393,24 @@ export const StudentCabinet = {
               ⚠️
             </div>
             <div>
-              <div style="font-size:1.05rem; font-weight:800; color:#991b1b;">
-                Напоминание: Оплата обучения за ${currentAcademicMonth.name} не зафиксирована
-              </div>
+              ${paymentDue.debtMonth ? `
+                <div style="font-size:1.05rem; font-weight:800; color:#991b1b;">
+                  У вас долг за ${toPrepositional(debtMonthName)}
+                </div>
+              ` : ''}
+              ${paymentDue.currentUnpaid ? `
+                <div style="font-size:${paymentDue.debtMonth ? '0.92rem' : '1.05rem'}; font-weight:800; color:#991b1b; margin-top:${paymentDue.debtMonth ? '2px' : '0'};">
+                  Оплата за ${toPrepositional(currentMonthName)} не зафиксирована
+                </div>
+              ` : ''}
               <div style="font-size:var(--font-size-sm); color:#7f1d1d; margin-top:2px;">
-                Пожалуйста, внесите оплату за текущий месяц обучения или уточните информацию у преподавателя. Предупреждение снимется сразу после отметки оплаты.
+                Пожалуйста, внесите оплату или уточните информацию у преподавателя. Предупреждение снимется сразу после отметки оплаты.
               </div>
             </div>
           </div>
           <div>
             <span class="badge" style="background:#dc2626; color:#ffffff; font-size:0.85rem; padding:6px 14px; font-weight:800; border-radius:var(--radius-full);">
-              Требуется оплата
+              ${paymentDue.debtMonth ? 'Есть долг' : 'Требуется оплата'}
             </span>
           </div>
         </div>
@@ -511,7 +522,7 @@ export const StudentCabinet = {
           <div>
             <div class="cabinet-homework-title">Домашнее задание на следующий урок</div>
             <div class="cabinet-homework-subtitle">
-              ${unlockedLesson ? `${unlockedLesson.monthName} • Урок ${unlockedLesson.lessonNumber}: «${unlockedLesson.topic}» ${unlockedLesson.homework?.isFromPrevious ? `<span style="background:rgba(255,255,255,0.25); padding:2px 7px; border-radius:6px; font-weight:700; font-size:0.75rem;">(ДЗ с Урока ${unlockedLesson.homework.sourceLesson.lessonNumber})</span> ` : ''}${unlockedLesson.homework?.deadline ? `• ⏳ Срок сдачи: ${unlockedLesson.homework.deadline}` : ''}` : 'Задания открываются последовательно после проведенных уроков'}
+              ${unlockedLesson ? `${unlockedLesson.monthName} • Урок ${unlockedLesson.lessonNumber}: «${unlockedLesson.topic}» ${unlockedLesson.homework?.deadline ? `• ⏳ Срок сдачи: ${unlockedLesson.homework.deadline}` : ''}` : 'Задания открываются последовательно после проведенных уроков'}
             </div>
           </div>
         </div>

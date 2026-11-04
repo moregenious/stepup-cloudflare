@@ -147,6 +147,22 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   ] } });
   assert.equal(buy.json.results[0].ok, true, JSON.stringify(buy.json));
 
+  // Birthday present: 200 points once a year, within two weeks after the birthday; the year of birth is ignored
+  const bdayRec = (id, points) => ({ c: 'pointRecords', id, t: 'put', v: { studentId: 'stu-1', points, category: 'День рождения', comment: 'ДР' } });
+  const fiveDaysAgo = new Date(Date.now() - 5 * 86400000);
+  const wrongYearBirth = `1999-${String(fiveDaysAgo.getUTCMonth() + 1).padStart(2, '0')}-${String(fiveDaysAgo.getUTCDate()).padStart(2, '0')}`;
+  await call('/api/push', { cookie: admin.cookie, body: { ops: [{ c: 'students', id: 'stu-1', t: 'patch', set: [[['birthDate'], wrongYearBirth]], unset: [] }] } });
+  await call('/api/push', { cookie: student.cookie, body: { ops: [bdayRec('pt-bday-500', 500)] } });
+  const b200 = await call('/api/push', { cookie: student.cookie, body: { ops: [bdayRec('pt-bday-1', 200)] } });
+  assert.equal(b200.json.results[0].ok, true, JSON.stringify(b200.json.results));
+  await call('/api/push', { cookie: student.cookie, body: { ops: [bdayRec('pt-bday-2', 200)] } });
+  const bdayState = rowsOf(await call('/api/state', { body: { known: {} }, cookie: student.cookie }), 'pointRecords');
+  assert.deepEqual(bdayState.filter(r => r.category === 'День рождения').map(r => r.points), [200], 'one present of 200 (500 and the repeat are refused)');
+  const longAgo = new Date(Date.now() - 40 * 86400000);
+  await call('/api/push', { cookie: admin.cookie, body: { ops: [{ c: 'students', id: 'stu-1', t: 'patch', set: [[['birthDate'], `2015-${String(longAgo.getUTCMonth() + 1).padStart(2, '0')}-${String(longAgo.getUTCDate()).padStart(2, '0')}`], [['lastBirthdayBonusYear'], 0]], unset: [] }] } });
+  await call('/api/push', { cookie: student.cookie, body: { ops: [bdayRec('pt-bday-3', 200)] } });
+  assert.equal(rowsOf(await call('/api/state', { body: { known: {} }, cookie: student.cookie }), 'pointRecords').some(r => r.id === 'pt-bday-3'), false, 'not 40 days after the birthday');
+
   // Files: staff upload, range download, auth required, students only avatars
   const bytes = new Uint8Array(1000).map((_, i) => i % 256);
   const up = await call('/api/files?name=' + encodeURIComponent('Unit 1 audio.mp3') + '&folder=audio', {
@@ -191,6 +207,14 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   assert.deepEqual(sAtt.map(a => a.marks), [{ 'stu-1': 'absent' }]);
   const sAttW = await call('/api/push', { cookie: student.cookie, body: { ops: [{ c: 'attendance', id: 'grp-a_2026-10-24', t: 'put', v: { marks: { 'stu-1': 'present' } } }] } });
   assert.equal(sAttW.json.results[0].ok, false);
+
+  // Conducted-lesson marks of a group are merged: a device saving its older marks does not erase a newer one
+  const markLesson = (cookie, map) => call('/api/push', { cookie, body: { ops: [{ c: 'groups', id: 'grp-a', t: 'patch', set: [[['conductedMap'], map]], unset: [] }] } });
+  await markLesson(admin.cookie, { '2-8': true });
+  await markLesson(teacher.cookie, { '3-1': true });           // the automation on the teacher's device
+  await markLesson(admin.cookie, { '2-8': true, '2-7': true }); // an older device sends its whole map later
+  const grpA = rowsOf(await call('/api/state', { body: { known: {} }, cookie: admin.cookie }), 'groups').find(g => g.id === 'grp-a');
+  assert.deepEqual(Object.keys(grpA.conductedMap).sort(), ['2-7', '2-8', '3-1']);
 
   // Analytics events: user comes from the session, junk is filtered, admin-only CSV export with pseudonyms
   const ev = await call('/api/events', { cookie: student.cookie, body: { events: [

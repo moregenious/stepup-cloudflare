@@ -998,3 +998,10 @@ dialog.app-modal::backdrop {
 }
 .admin-teacher-filter { width: auto; max-width: 220px; font-weight: 700; font-size: 0.8rem; padding: 4px 8px; }
 @media (max-width: 600px) { .admin-teacher-filter { max-width: 120px; font-size: 0.72rem; } }
+/* Narrow phones: the sync badge keeps only its coloured dot so the theme and logout buttons fit */
+@media (max-width: 420px) {
+  .cloud-sync-badge .cloud-sync-text { display: none; }
+  .header-right { gap: 6px; }
+  .admin-teacher-filter { max-width: 104px; }
+  .btn-theme-toggle { width: 30px; height: 30px; }
+}

@@ -46,7 +46,9 @@ export const HomeworkView = {
 
     // Resolve effective homework (if current lesson's homework is empty due to extra/holiday lessons)
     const effectiveHw = activeLesson ? store.getEffectiveHomeworkForLesson(textbookName, activeLesson.monthNumber, activeLesson.lessonNumber) : null;
-    const isFromPrevious = Boolean(effectiveHw?.isFromPrevious);
+    // Students are not told which lesson a carried-over homework comes from (it confused them); staff still see it
+    const showHwSource = !auth.isStudent();
+    const isFromPrevious = Boolean(effectiveHw?.isFromPrevious) && showHwSource;
     const hwText = (effectiveHw?.text || activeLesson?.homework?.text || '').trim();
     const hwDeadline = effectiveHw?.deadline || activeLesson?.homework?.deadline || 'к следующему уроку';
 
@@ -147,7 +149,7 @@ export const HomeworkView = {
                 ${studentAudioFiles.length > 0 ? `
                   <div class="homework-audio-section">
                     <div class="homework-section-title">
-                      <span>🎧 ${isFilesFromPrevious ? `Аудиозаписи к домашнему заданию (из Урока ${effectiveHw.sourceLesson.lessonNumber}):` : 'Аудиозаписи к уроку (с регулировкой скорости 0.5x – 1.25x):'}</span>
+                      <span>🎧 ${isFilesFromPrevious ? `Аудиозаписи к домашнему заданию${showHwSource ? ` (из Урока ${effectiveHw.sourceLesson.lessonNumber})` : ''}:` : 'Аудиозаписи к уроку (с регулировкой скорости 0.5x – 1.25x):'}</span>
                     </div>
                     <div class="homework-audio-list">
                       ${studentAudioFiles.map((f, i) => AudioPlayer.renderPlayerHtml(f, `hw-audio-${i}`)).join('')}
@@ -159,7 +161,7 @@ export const HomeworkView = {
                 ${studentDocFiles.length > 0 ? `
                   <div class="homework-files-section">
                     <div class="homework-section-title">
-                      <span>📎 ${isFilesFromPrevious ? `Материалы к домашнему заданию (из Урока ${effectiveHw.sourceLesson.lessonNumber}):` : 'Прикрепленные учебные материалы и документы:'}</span>
+                      <span>📎 ${isFilesFromPrevious ? `Материалы к домашнему заданию${showHwSource ? ` (из Урока ${effectiveHw.sourceLesson.lessonNumber})` : ''}:` : 'Прикрепленные учебные материалы и документы:'}</span>
                     </div>
                     <div class="homework-files-list">
                       ${studentDocFiles.map(f => {

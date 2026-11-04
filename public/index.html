@@ -3,6 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Theme before the first paint (no white flash): saved choice, otherwise the device setting -->
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('stepup_theme'); } catch (e) {}
+      var dark = saved ? saved === 'dark' : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    })();
+  </script>
   <title>Step Up English — Курсы английского языка</title>
   <meta name="description" content="Step Up English — CRM и LMS система для курсов английского языка: ученики, группы, учителя, расписание, уровни, авторизация по логину/паролю и QR-коду, система баллов.">
 
@@ -17,6 +26,7 @@
   <link rel="stylesheet" href="./css/components.css">
   <link rel="stylesheet" href="./css/sidebar.css">
   <link rel="stylesheet" href="./css/views.css">
+  <link rel="stylesheet" href="./css/theme-dark.css">
 </head>
 <body>
 
@@ -75,6 +85,8 @@
             <span class="cloud-sync-dot"></span>
             <span class="cloud-sync-text">Подключение...</span>
           </div>
+
+          <button type="button" class="btn-theme-toggle" id="btn-theme-toggle" title="Тёмная / светлая тема" aria-label="Переключить тему">🌙</button>
 
           <button type="button" class="btn btn-logout-header btn-app-logout" id="btn-header-logout" title="Выйти на главный экран входа">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

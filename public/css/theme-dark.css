@@ -1,0 +1,142 @@
+/* Dark theme: <html data-theme="dark"> (set in index.html from the saved choice or the device setting, toggled by the header button).
+   Variables first; then the light colours that views write inline (style="background:#fff…"). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg-app: #0b1120;
+  --color-bg-card: #131c2e;
+  --color-bg-input: #0f172a;
+  --color-bg-hover: #1e293b;
+  --color-bg-subtle: #0f172a;
+  --color-text-main: #e5e7eb;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #94a3b8;
+  --color-border: #243046;
+  --color-border-subtle: #1e293b;
+  --color-border-strong: #334155;
+  --color-primary-subtle: #1e1b4b;
+  --color-primary-text: #c7d2fe;
+  --color-success-bg: #062a1c; --color-success-text: #6ee7b7; --color-success-border: #065f46;
+  --color-info-bg: #082236; --color-info-text: #7dd3fc; --color-info-border: #075985;
+  --color-warning-bg: #2a1e06; --color-warning-text: #fcd34d; --color-warning-border: #78350f;
+  --color-danger-bg: #2b0d0d; --color-danger-text: #fca5a5; --color-danger-border: #7f1d1d;
+}
+:root[data-theme="dark"] body { background: var(--color-bg-app); color: var(--color-text-main); }
+
+/* Light backgrounds written inline in the views */
+:root[data-theme="dark"] [style*="background:#ffffff"], :root[data-theme="dark"] [style*="background: #ffffff"],
+:root[data-theme="dark"] [style*="background:#fff;"], :root[data-theme="dark"] [style*="background: #fff;"],
+:root[data-theme="dark"] [style*="background: white"], :root[data-theme="dark"] [style*="background:white"] { background: var(--color-bg-card) !important; }
+:root[data-theme="dark"] [style*="#f8fafc"], :root[data-theme="dark"] [style*="#f1f5f9"] { background: #0f172a !important; }
+:root[data-theme="dark"] [style*="#f0f9ff"], :root[data-theme="dark"] [style*="#e0f2fe"] { background: #082236 !important; border-color: #075985 !important; }
+:root[data-theme="dark"] [style*="#fef2f2"], :root[data-theme="dark"] [style*="#fee2e2"] { background: #2b0d0d !important; border-color: #7f1d1d !important; }
+:root[data-theme="dark"] [style*="#fffbeb"], :root[data-theme="dark"] [style*="#fef3c7"] { background: #2a1e06 !important; border-color: #78350f !important; }
+:root[data-theme="dark"] [style*="#faf5ff"], :root[data-theme="dark"] [style*="#f3e8ff"] { background: #1f1033 !important; border-color: #581c87 !important; }
+:root[data-theme="dark"] [style*="#ecfdf5"], :root[data-theme="dark"] [style*="#dcfce7"], :root[data-theme="dark"] [style*="#f0fdf4"] { background: #062a1c !important; border-color: #065f46 !important; }
+:root[data-theme="dark"] [style*="#eef2ff"], :root[data-theme="dark"] [style*="#e0e7ff"] { background: #1e1b4b !important; }
+
+/* Dark text written inline */
+:root[data-theme="dark"] [style*="color:#0f172a"], :root[data-theme="dark"] [style*="color: #0f172a"],
+:root[data-theme="dark"] [style*="color:#1e293b"], :root[data-theme="dark"] [style*="color: #1e293b"],
+:root[data-theme="dark"] [style*="color:#334155"], :root[data-theme="dark"] [style*="color: #334155"],
+:root[data-theme="dark"] [style*="color: #0c4a6e"], :root[data-theme="dark"] [style*="color:#0c4a6e"] { color: #e5e7eb !important; }
+:root[data-theme="dark"] [style*="color:#64748b"], :root[data-theme="dark"] [style*="color: #64748b"],
+:root[data-theme="dark"] [style*="color:#475569"], :root[data-theme="dark"] [style*="color: #475569"] { color: #94a3b8 !important; }
+:root[data-theme="dark"] [style*="color: #991b1b"], :root[data-theme="dark"] [style*="color:#991b1b"],
+:root[data-theme="dark"] [style*="color: #7f1d1d"], :root[data-theme="dark"] [style*="color:#7f1d1d"] { color: #fca5a5 !important; }
+:root[data-theme="dark"] [style*="color: #581c87"], :root[data-theme="dark"] [style*="color:#581c87"],
+:root[data-theme="dark"] [style*="color:#4c1d95"], :root[data-theme="dark"] [style*="color: #4c1d95"] { color: #d8b4fe !important; }
+:root[data-theme="dark"] [style*="color: #0369a1"], :root[data-theme="dark"] [style*="color:#0369a1"],
+:root[data-theme="dark"] [style*="color: #075985"], :root[data-theme="dark"] [style*="color: #0284c7"] { color: #7dd3fc !important; }
+
+/* Components with their own light colours */
+:root[data-theme="dark"] .card, :root[data-theme="dark"] .stat-card, :root[data-theme="dark"] .app-modal,
+:root[data-theme="dark"] .games-choice-card, :root[data-theme="dark"] .contract-row, :root[data-theme="dark"] .tc-purchase-row { background: var(--color-bg-card); color: var(--color-text-main); border-color: var(--color-border); }
+:root[data-theme="dark"] .btn-secondary, :root[data-theme="dark"] .btn-ghost { background: #1e293b; color: #e5e7eb; border-color: #334155; }
+:root[data-theme="dark"] .form-control, :root[data-theme="dark"] select, :root[data-theme="dark"] input, :root[data-theme="dark"] textarea { background: #0f172a; color: #e5e7eb; border-color: #334155; }
+:root[data-theme="dark"] .picture-question { background: #082236; border-color: #075985; }
+:root[data-theme="dark"] .picture-word { color: #e0f2fe; }
+:root[data-theme="dark"] .picture-prompt { color: #7dd3fc; }
+:root[data-theme="dark"] .picture-option { background: #131c2e; color: #e5e7eb; }
+:root[data-theme="dark"] .preview-as-banner { background: #1e1b4b; border-color: #3730a3; color: #e0e7ff; }
+:root[data-theme="dark"] .games-play-stats { background: #1e1b4b; color: #c7d2fe; }
+:root[data-theme="dark"] .mobile-bottom-bar, :root[data-theme="dark"] .app-header, :root[data-theme="dark"] header { background: #0f172a !important; border-color: #1e293b !important; }
+:root[data-theme="dark"] img { opacity: 0.95; }
+
+/* Header theme button (both themes) */
+.btn-theme-toggle {
+  display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex-shrink: 0;
+  border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg-card);
+  font-size: 1rem; line-height: 1; cursor: pointer; transition: transform var(--transition-fast);
+}
+.btn-theme-toggle:hover { transform: translateY(-1px); }
+
+/* Elements with their own light colours (classes) */
+:root[data-theme="dark"] .btn-logout-header { background-color: #2b0d0d; color: #fca5a5; border-color: #7f1d1d; }
+:root[data-theme="dark"] .badge-planned { background-color: #2a1e06; color: #fcd34d; }
+:root[data-theme="dark"] .badge-completed { background-color: #062a1c; color: #6ee7b7; }
+:root[data-theme="dark"] .badge-cancelled { background-color: #2b0d0d; color: #fca5a5; }
+:root[data-theme="dark"] .badge-shift-1 { background-color: #2a1e06; color: #fcd34d; }
+:root[data-theme="dark"] .badge-shift-2 { background-color: #1f1033; color: #d8b4fe; }
+:root[data-theme="dark"] .btn-toggle-contract { background: #2b0d0d; color: #fca5a5; border-color: #7f1d1d; }
+:root[data-theme="dark"] .btn-toggle-contract.is-signed { background: #062a1c; color: #6ee7b7; border-color: #065f46; }
+:root[data-theme="dark"] .games-choice-streak { background: #2a1e06; color: #fcd34d; }
+:root[data-theme="dark"] .games-choice-easy { background: #062a1c; color: #6ee7b7; }
+:root[data-theme="dark"] .tc-purchase-count { background: rgba(255, 255, 255, 0.12); }
+:root[data-theme="dark"] .picture-option.is-correct { background: #062a1c; border-color: #16a34a; }
+:root[data-theme="dark"] .picture-option.is-wrong { background: #2b0d0d; border-color: #ef4444; }
+:root[data-theme="dark"] .lesson-join-box, :root[data-theme="dark"] .lesson-recurring-toggle-box { background: #0f172a; border-color: #243046; }
+:root[data-theme="dark"] .lesson-join-chip { color: #e5e7eb; border-color: #334155; }
+:root[data-theme="dark"] .lesson-join-chip:has(input:checked) { background: #082236; border-color: #0369a1; color: #7dd3fc; }
+:root[data-theme="dark"] .file-attachment-badge { background: var(--color-bg-card) !important; color: var(--color-text-main); }
+:root[data-theme="dark"] .table th, :root[data-theme="dark"] .data-table th { background: #0f172a; color: #cbd5e1; }
+:root[data-theme="dark"] .table td, :root[data-theme="dark"] .data-table td { border-color: #243046; }
+:root[data-theme="dark"] .empty-state { color: var(--color-text-muted); }
+
+/* Schedule: dark grid; lesson cards keep their pastel colour with dark text */
+:root[data-theme="dark"] .weekly-day-col, :root[data-theme="dark"] .weekly-day-header-cell { background: #0f172a !important; border-color: #243046 !important; color: #e5e7eb; }
+:root[data-theme="dark"] .weekly-slot-add-btn { background: transparent !important; color: #64748b; border-color: #243046 !important; }
+:root[data-theme="dark"] .weekly-lesson-card { filter: brightness(0.9); }
+:root[data-theme="dark"] .weekly-lesson-card, :root[data-theme="dark"] .weekly-lesson-card * { color: #0f172a !important; }
+:root[data-theme="dark"] .btn-vacation-toggle { background: #1e293b; color: #e5e7eb; border-color: #334155; }
+
+/* Small chips and badges */
+:root[data-theme="dark"] .student-points-badge { background: #2a1e06; color: #fcd34d; border-color: #78350f; }
+:root[data-theme="dark"] .badge-level { background: #1e1b4b; color: #c7d2fe; }
+:root[data-theme="dark"] [style*="background:#eff6ff"], :root[data-theme="dark"] [style*="background: #eff6ff"] { background: #172554 !important; color: #bfdbfe !important; }
+:root[data-theme="dark"] [style*="background: #e2e8f0"], :root[data-theme="dark"] [style*="background:#e2e8f0"] { background: #1e293b !important; color: #cbd5e1 !important; }
+:root[data-theme="dark"] .explorer-address-bar { background: #0f172a !important; border-color: #243046 !important; color: #e5e7eb; }
+
+/* Lesson mode (teacher cabinet) */
+:root[data-theme="dark"] .lm-pt, :root[data-theme="dark"] .lm-pay { background: #1e293b; color: #e5e7eb; border-color: #334155; }
+:root[data-theme="dark"] .lm-pay.paid { background: #062a1c; color: #6ee7b7; border-color: #065f46; }
+
+/* Irregular verbs */
+:root[data-theme="dark"] .iv-header-card, :root[data-theme="dark"] .iv-control-card, :root[data-theme="dark"] .iv-table-card { background: var(--color-bg-card) !important; border-color: #243046 !important; color: #e5e7eb; }
+:root[data-theme="dark"] .iv-td-infinitive, :root[data-theme="dark"] .iv-td-past-simple, :root[data-theme="dark"] .iv-td-past-participle, :root[data-theme="dark"] .iv-td-translation,
+:root[data-theme="dark"] .iv-th-infinitive, :root[data-theme="dark"] .iv-th-past-simple, :root[data-theme="dark"] .iv-th-past-participle { background: #0f172a !important; color: #e5e7eb !important; border-color: #243046 !important; }
+:root[data-theme="dark"] .iv-letter-btn, :root[data-theme="dark"] .iv-count-badge { background: #1e293b !important; color: #e5e7eb !important; border-color: #334155 !important; }
+
+/* Homework */
+:root[data-theme="dark"] .homework-text-body, :root[data-theme="dark"] .homework-vocab-item, :root[data-theme="dark"] .esl-audio-player { background: #0f172a !important; color: #e5e7eb !important; border-color: #243046 !important; }
+:root[data-theme="dark"] .homework-deadline-pill { background: #2a1e06 !important; color: #fcd34d !important; }
+:root[data-theme="dark"] .weekly-grid-scroll, :root[data-theme="dark"] .weekly-gutter-header, :root[data-theme="dark"] .weekly-time-gutter-col { background: #0b1120 !important; border-color: #243046 !important; color: #94a3b8; }
+:root[data-theme="dark"] .iv-th-translation { background: #0f172a !important; color: #e5e7eb !important; border-color: #243046 !important; }
+:root[data-theme="dark"] .lm-c.ok { background: #062a1c !important; color: #6ee7b7 !important; }
+:root[data-theme="dark"] .lm-c.no { background: #2b0d0d !important; color: #fca5a5 !important; }
+:root[data-theme="dark"] .lm-c.wait { background: #1e293b !important; color: #cbd5e1 !important; }
+:root[data-theme="dark"] .audio-error-notice { background: #2b0d0d !important; }
+:root[data-theme="dark"] .point-score-tag { background: #1e293b !important; color: #e5e7eb !important; }
+:root[data-theme="dark"] .leaderboard-select-box, :root[data-theme="dark"] .leaderboard-table-wrap { background: var(--color-bg-card) !important; border-color: #243046 !important; }
+:root[data-theme="dark"] .leaderboard-table-wrap th { background: #0f172a !important; color: #cbd5e1 !important; border-color: #243046 !important; }
+:root[data-theme="dark"] .leaderboard-row-me { background: #1e1b4b !important; }
+:root[data-theme="dark"] .rank-badge-cell { background: #1e293b !important; color: #e5e7eb !important; }
+:root[data-theme="dark"] .rank-badge-cell.gold, :root[data-theme="dark"] .rank-badge-cell.silver, :root[data-theme="dark"] .rank-badge-cell.bronze { color: #0f172a !important; }
+:root[data-theme="dark"] .rank-badge-cell.gold { background: #fcd34d !important; }
+:root[data-theme="dark"] .rank-badge-cell.silver { background: #cbd5e1 !important; }
+:root[data-theme="dark"] .rank-badge-cell.bronze { background: #fdba74 !important; }
+:root[data-theme="dark"] .lesson-modal-dialog { background: var(--color-bg-card) !important; color: #e5e7eb; }
+:root[data-theme="dark"] .lesson-modal-dialog .lesson-modal-title, :root[data-theme="dark"] .lesson-modal-dialog label, :root[data-theme="dark"] .lesson-modal-dialog span { color: inherit; }
+:root[data-theme="dark"] .btn-day-pill { background: #1e293b !important; color: #e5e7eb !important; border-color: #334155 !important; }
+:root[data-theme="dark"] .btn-day-pill.active { background: #0284c7 !important; color: #fff !important; border-color: #0284c7 !important; }
+/* Colour game: a light ring so black (and every colour) stands out on the dark card */
+:root[data-theme="dark"] .picture-swatch { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), 0 6px 18px rgba(0, 0, 0, 0.4); }

@@ -420,13 +420,18 @@ function validateStudentPointRecord(rec, student, now) {
       student.surveyBonusAwarded = true;
       return out;
     case 'День рождения': {
-      if (points !== 500) return 'Неверная сумма бонуса';
-      const year = now.getFullYear();
+      // 200 points once a year, on the birthday or within 14 days after it (the student may not open the site that day).
+      // Day and month only: the year in the survey is often wrong.
+      if (points !== 200) return 'Неверная сумма бонуса';
+      const m = String(student.birthDate || '').match(/^\d{4}-(\d{1,2})-(\d{1,2})/) || String(student.birthDate || '').match(/^(\d{1,2})[./](\d{1,2})/);
+      if (!m) return 'Не указана дата рождения';
+      const [month, day] = /^\d{4}-/.test(student.birthDate) ? [Number(m[1]), Number(m[2])] : [Number(m[2]), Number(m[1])];
+      let year = now.getUTCFullYear();
+      let bd = Date.UTC(year, month - 1, day);
+      if (bd > now.getTime() + 86400000) { year -= 1; bd = Date.UTC(year, month - 1, day); }
+      const daysAgo = (now.getTime() - bd) / 86400000;
+      if (daysAgo < -1 || daysAgo > 15) return 'День рождения ученика был не в последние две недели';
       if (student.lastBirthdayBonusYear === year) return 'Бонус ко дню рождения уже начислен в этом году';
-      const parts = String(student.birthDate || '').split('-');
-      if (parts.length < 3) return 'Не указана дата рождения';
-      const bd = new Date(year, Number(parts[1]) - 1, Number(parts[2]), 12);
-      if (!sameDay(bd.toISOString(), now, 1.5)) return 'Сегодня не день рождения ученика';
       student.lastBirthdayBonusYear = year;
       out.excludeFromRating = true;
       return out;
@@ -658,6 +663,12 @@ export async function push(user, rawOps) {
 
       if (op.c === 'settings' && (op.id === 'deletedStudents' || op.id === 'deletedGroups')) {
         next = [...new Set([...(Array.isArray(existing) ? existing : []), ...(Array.isArray(next) ? next : [])])];
+      }
+
+      // Lesson marks of a group ({ '3-1': true | false }) are merged, never replaced as a whole: two devices that
+      // mark lessons at the same time must not erase each other's marks (see store.deriveConductedLessons)
+      if (op.c === 'groups' && isPlainObject(next) && isPlainObject(existing?.conductedMap)) {
+        next.conductedMap = { ...existing.conductedMap, ...(isPlainObject(next.conductedMap) ? next.conductedMap : {}) };
       }
 
       if (op.c === 'settings' && op.id === 'admin') {

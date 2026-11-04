@@ -3,7 +3,7 @@ node_modules/
 .wrangler/
 
 # Local data, migration output, backups — contain personal data, never commit
-data/
+/data/
 *.sqlite
 *backup*.json
 *.json.json
@@ -15,10 +15,8 @@ import.sql
 .env
 .env.*
 !.dev.vars.example
-.claude/launch.json
+
+# Local notes for Claude and its tool settings (personal, not part of the project)
 CLAUDE.md
-CLAUDE.md
-CLAUDE.md
-CLAUDE.md
-CLAUDE.md
-CLAUDE.md
+.claude/
+career-cases.md

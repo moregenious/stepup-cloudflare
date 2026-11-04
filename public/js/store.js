@@ -33,6 +33,16 @@ import { toast } from './components/toast.js';
 
 const LEGACY_STORAGE_KEYS = ['step_into_future_crm_v1', 'step_into_future_crm_v2', 'step_into_future_crm_v3', 'step_into_future_crm_v4', 'step_into_future_crm_v5', 'step_into_future_crm_v6'];
 
+/** Auto-completion catches up lessons of the last days nobody opened the site after; older misses are marked by hand */
+const CATCH_UP_DAYS = 3;
+const CATCH_UP_FROM = new Date(2026, 10, 1);
+
+/** Birthday present (also checked by the server in src/lib/engine.js) */
+const BIRTHDAY_BONUS = 200;
+const BIRTHDAY_WINDOW_DAYS = 14;
+// Birthdays before the new rules were handled by hand: no presents for them afterwards
+const BIRTHDAY_AUTO_FROM = new Date(2026, 10, 4);
+
 /** Secret titles were renamed (November 2026): old name -> new name, applied to students' saved titles */
 const SECRET_TITLE_RENAMES = {
   'знаток слов': 'Словарный ниндзя',
@@ -402,6 +412,7 @@ class Store {
     try { this.removeGeneratedYearlyLessons(); } catch (e) { /* ignore */ }
     try { this.autoCompletePastLessons(); } catch (e) { /* ignore */ }
     try { this.normalizeAllGrades(); } catch (e) { /* ignore */ }
+    try { this.awardMissedBirthdayBonuses(); } catch (e) { /* ignore */ }
     // Renamed secret titles are applied on load; a staff browser stores them on the server
     if (this._titlesRenamed && this._serverSynced) { this._titlesRenamed = false; this.saveState(); }
     try { this.awardMonthlyLeaders(); } catch (e) { /* ignore */ }
@@ -613,12 +624,12 @@ class Store {
         }
       });
 
-      // Sort chronologically
-      group.conductedLessons.sort((a, b) => {
-        const [mA, lA] = a.split('-').map(Number);
-        const [mB, lB] = b.split('-').map(Number);
-        return (mA * 100 + lA) - (mB * 100 + lB);
-      });
+      // Rebuild from the per-lesson marks (see deriveConductedLessons), sorted chronologically
+      const derived = this.deriveConductedLessons(group);
+      if (derived.join() !== group.conductedLessons.join()) {
+        group.conductedLessons = derived;
+        changed = true;
+      }
     });
 
     return changed;
@@ -1081,18 +1092,36 @@ class Store {
     return false;
   }
 
+  /**
+   * Conducted textbook lessons of a group. group.conductedLessons is a whole array, and the sync sends a changed
+   * array as one value: two devices marking lessons at about the same time overwrote each other (a lesson done
+   * by the automation on one device disappeared when another device saved its older list). Every mark is now
+   * also kept in group.conductedMap = { '3-1': true | false }, which syncs key by key, and the list is rebuilt
+   * from it: map 'true' keys + array keys the map does not mention (older clients) − map 'false' keys.
+   */
+  deriveConductedLessons(group) {
+    const map = group.conductedMap && typeof group.conductedMap === 'object' ? group.conductedMap : {};
+    const keys = new Set((Array.isArray(group.conductedLessons) ? group.conductedLessons : []).filter(k => map[k] !== false));
+    Object.entries(map).forEach(([k, on]) => { if (on) keys.add(k); });
+    return [...keys].sort((a, b) => {
+      const [mA, lA] = a.split('-').map(Number);
+      const [mB, lB] = b.split('-').map(Number);
+      return (mA * 100 + lA) - (mB * 100 + lB);
+    });
+  }
+
+  markGroupLesson(group, key, isConducted) {
+    group.conductedMap = { ...(group.conductedMap || {}), [key]: Boolean(isConducted) };
+    group.conductedLessons = this.deriveConductedLessons(group);
+  }
+
   setGroupLessonConducted(groupId, monthNumber, lessonNumber, isConducted) {
     if (!groupId) return false;
     const group = this.getGroupById(groupId);
     if (!group) return false;
-    if (!Array.isArray(group.conductedLessons)) {
-      group.conductedLessons = [];
-    }
     const key = `${Number(monthNumber)}-${Number(lessonNumber)}`;
+    this.markGroupLesson(group, key, isConducted);
     if (isConducted) {
-      if (!group.conductedLessons.includes(key)) {
-        group.conductedLessons.push(key);
-      }
       try {
         if (group.textbook) {
           this.syncVocabularyPoolForGroupLesson(groupId, group.textbook, monthNumber, lessonNumber);
@@ -1100,8 +1129,6 @@ class Store {
       } catch (err) {
         console.warn('⚠️ syncVocabularyPoolForGroupLesson warning:', err);
       }
-    } else {
-      group.conductedLessons = group.conductedLessons.filter(k => k !== key);
     }
 
     this.saveState(true);
@@ -1112,30 +1139,15 @@ class Store {
     if (!groupId) return false;
     const group = this.getGroupById(groupId);
     if (!group) return false;
-    if (!Array.isArray(group.conductedLessons)) {
-      group.conductedLessons = [];
-    }
     const m = Number(monthNumber);
     for (let l = 1; l <= 8; l++) {
-      const key = `${m}-${l}`;
-      if (isConducted) {
-        if (!group.conductedLessons.includes(key)) {
-          group.conductedLessons.push(key);
-        }
-        if (group.textbook) {
-          try {
-            this.syncVocabularyPoolForGroupLesson(groupId, group.textbook, m, l);
-          } catch (_) {}
-        }
-      } else {
-        group.conductedLessons = group.conductedLessons.filter(k => k !== key);
+      this.markGroupLesson(group, `${m}-${l}`, isConducted);
+      if (isConducted && group.textbook) {
+        try {
+          this.syncVocabularyPoolForGroupLesson(groupId, group.textbook, m, l);
+        } catch (_) {}
       }
     }
-    group.conductedLessons.sort((a, b) => {
-      const [mA, lA] = a.split('-').map(Number);
-      const [mB, lB] = b.split('-').map(Number);
-      return (mA * 100 + lA) - (mB * 100 + lB);
-    });
     this.saveState(true);
     return true;
   }
@@ -2324,6 +2336,33 @@ class Store {
     const todayDateStr = `${yyyy}-${mm}-${dd}`;
     const todayShortStr = `${dd}.${mm}`;
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    // 0. MISSED DAYS: a lesson is completed only by a staff browser that is open after it ends; if nobody opened
+    // the site that day (evening and weekend lessons), it stayed unmarked for good. Catch up the last few days,
+    // oldest first so the textbook moves on in order. Any mark on that date (cancelled, moved, kept planned,
+    // deleted) means a person decided, and is left alone.
+    for (let back = CATCH_UP_DAYS; back >= 1; back--) {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
+      if (day < CATCH_UP_FROM) continue;
+      const dayIdx = day.getDay() === 0 ? 7 : day.getDay();
+      const dStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+      const dShort = `${dStr.slice(8, 10)}.${dStr.slice(5, 7)}`;
+      this.state.schedule.forEach(lesson => {
+        if (!lesson.isRecurring || lesson.dayIndex !== dayIdx) return;
+        const exc = lesson.exceptions && (lesson.exceptions[dStr] || lesson.exceptions[dShort]);
+        if (exc) return;
+        const createdMs = Number((String(lesson.id).match(/^rec-(\d{13})/) || [])[1]) || Date.parse(lesson.createdAt || '') || 0;
+        if (createdMs && createdMs > day.getTime() + 86400000) return; // the lesson did not exist yet
+        if (!lesson.exceptions) lesson.exceptions = {};
+        const mark = { status: 'completed', completedAt: now.toISOString(), autoCaughtUp: true };
+        lesson.exceptions[dStr] = { ...mark };
+        lesson.exceptions[dShort] = { ...mark };
+        updatedCount++;
+        if (lesson.groupId) {
+          try { this._handleLessonCompletion(lesson, dStr); } catch (err) { console.warn('⚠️ catch-up completion:', err); }
+        }
+      });
+    }
 
     this.state.schedule.forEach(lesson => {
       // 1. RECURRING WEEKLY LESSONS
@@ -3909,43 +3948,77 @@ class Store {
   }
 
   // --- Birthday Bonus System (+500 баллов) ---
-  checkAndAwardBirthdayBonus(studentId) {
+  /**
+   * The latest birthday of the student (day and month from the survey; the year is ignored, kids often get it wrong).
+   * Returns { year, daysAgo, label } — daysAgo 0 = today — or null when the date is missing or unreadable.
+   */
+  birthdayOccurrence(student, now = new Date()) {
+    const raw = String(student?.birthDate || '').trim();
+    let m = raw.match(/^\d{4}-(\d{1,2})-(\d{1,2})/);
+    let month, day;
+    if (m) { month = Number(m[1]); day = Number(m[2]); }
+    else if ((m = raw.match(/^(\d{1,2})[./](\d{1,2})/))) { day = Number(m[1]); month = Number(m[2]); }
+    if (!month || !day || month > 12 || day > 31) return null;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let year = now.getFullYear();
+    let occ = new Date(year, month - 1, day);
+    if (occ > today) { year -= 1; occ = new Date(year, month - 1, day); }
+    const daysAgo = Math.round((today - occ) / 86400000);
+    return { year, daysAgo, date: occ, label: `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}` };
+  }
+
+  /** A birthday present already given by hand (any record about a birthday close to the date) */
+  hasBirthdayRecord(student, occ) {
+    const from = Date.now() - (occ.daysAgo + 3) * 86400000;
+    return (this.state.pointRecords || []).some(r => r && r.studentId === student.id && Number(r.points) > 0
+      && new Date(r.date || 0).getTime() >= from
+      && (r.category === 'День рождения' || /рожд|birthday/i.test(`${r.category || ''} ${r.comment || ''}`)));
+  }
+
+  /**
+   * Birthday present: BIRTHDAY_BONUS points once a year. The student gets it on opening the site on the birthday
+   * or within BIRTHDAY_WINDOW_DAYS after it; a staff browser gives it from the next day on to those who did not come.
+   */
+  checkAndAwardBirthdayBonus(studentId, { byStaff = false } = {}) {
     const student = this.getStudentById(studentId);
-    if (!student || !student.birthDate) return { isBirthday: false, awarded: false };
+    const occ = student ? this.birthdayOccurrence(student) : null;
+    if (!occ || occ.daysAgo > BIRTHDAY_WINDOW_DAYS || occ.date < BIRTHDAY_AUTO_FROM) return { isBirthday: false, awarded: false };
+    const isBirthday = occ.daysAgo === 0;
 
-    const parts = student.birthDate.split('-');
-    if (parts.length < 3) return { isBirthday: false, awarded: false };
-
-    const bMonth = parseInt(parts[1], 10);
-    const bDay = parseInt(parts[2], 10);
-
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-    const currentDay = now.getDate();
-
-    const isTodayBirthday = (bMonth === currentMonth && bDay === currentDay);
-    if (!isTodayBirthday) {
-      return { isBirthday: false, awarded: false };
+    if (student.lastBirthdayBonusYear === occ.year) {
+      return { isBirthday, awarded: false, alreadyAwardedThisYear: true, student };
     }
-
-    if (student.lastBirthdayBonusYear === currentYear) {
-      return { isBirthday: true, awarded: false, alreadyAwardedThisYear: true, student };
+    if (this.hasBirthdayRecord(student, occ)) {
+      // Given by hand already: just remember it (staff sessions store the mark)
+      if (byStaff) { student.lastBirthdayBonusYear = occ.year; this.saveState(); }
+      return { isBirthday, awarded: false, alreadyAwardedThisYear: true, student };
     }
+    if (byStaff && isBirthday) return { isBirthday, awarded: false, student }; // the day itself is the child's
 
-    student.lastBirthdayBonusYear = currentYear;
+    student.lastBirthdayBonusYear = occ.year;
     this.awardPoints({
       studentId: student.id,
       teacherId: 'admin',
-      points: 500,
+      points: BIRTHDAY_BONUS,
       type: 'add',
       category: 'День рождения',
-      comment: `Праздничный подарок от Step Up English на День Рождения ${currentYear}! 🎂🎁 (без рейтинга)`,
+      comment: `🎂 Подарок от Step Up English на день рождения (${occ.label})! (без рейтинга)`,
       excludeFromRating: true
     });
 
     this.saveState(true);
-    return { isBirthday: true, awarded: true, points: 500, student };
+    return { isBirthday, awarded: true, points: BIRTHDAY_BONUS, student };
+  }
+
+  /** Staff browser: presents for birthdays of the last days that the students have not collected themselves */
+  awardMissedBirthdayBonuses() {
+    if (this._birthdaysChecked || !this._serverSynced) return;
+    this._birthdaysChecked = true;
+    (this.state.students || []).forEach(s => {
+      if (s && s.status !== 'archived' && s.birthDate) {
+        try { this.checkAndAwardBirthdayBonus(s.id, { byStaff: true }); } catch (e) { /* ignore */ }
+      }
+    });
   }
 
   // --- Curriculum Helper: Next upcoming lesson in current month ---
@@ -4180,6 +4253,33 @@ class Store {
     return true;
   }
 
+  /** Contract with the school: student.contract = { signed, at, by } (marked by a teacher or the admin) */
+  setStudentContract(studentId, signed, byName = '') {
+    return this.updateStudent(studentId, {
+      contract: signed ? { signed: true, at: new Date().toISOString(), by: byName } : { signed: false }
+    });
+  }
+
+  /**
+   * What the student's cabinet warns about: an unpaid previous academic month (a debt) and the unpaid current one.
+   * The previous month counts only if the student already studied then (card created before that month ended).
+   */
+  getStudentPaymentDue(studentId) {
+    const months = this.getAcademicMonthsList();
+    const current = this.getCurrentAcademicMonth();
+    const idx = months.findIndex(m => m.key === current.key);
+    const prev = idx > 0 ? months[idx - 1] : null;
+    const student = this.getStudentById(studentId);
+    const created = student?.createdAt ? new Date(student.createdAt) : null;
+    const studiedInPrev = prev && (!created || isNaN(created) || created < new Date(prev.year, prev.monthIndex + 1, 1));
+    const isPaid = (m) => this.getPayment(studentId, m.key).status === 'paid';
+    return {
+      debtMonth: prev && studiedInPrev && !isPaid(prev) ? prev : null,
+      currentMonth: current,
+      currentUnpaid: !isPaid(current)
+    };
+  }
+
   getMonthPaymentsSummary(monthKey, groupId = 'all') {
     let students = this.getStudents();
     if (groupId && groupId !== 'all') {
@@ -4295,6 +4395,8 @@ class Store {
       phrasalStreak: student.gameStats.phrasalStreak || 0,
       mistakesStreak: student.gameStats.mistakesStreak || 0,
       synonymsStreak: student.gameStats.synonymsStreak || 0,
+      colorsStreak: student.gameStats.colorsStreak || 0,
+      animalsStreak: student.gameStats.animalsStreak || 0,
       unlockedTenseLevels: student.gameStats.unlockedTenseLevels,
       unlockedSecretTitles: (student.unlockedTitles || []).filter(t => SECRET_TITLE_NAMES.includes(t)),
       irregularRecentIds: student.gameStats.irregularRecentIds,
@@ -4527,6 +4629,10 @@ class Store {
       } else {
         student.gameStats.mistakesStreak = 0;
       }
+    } else if (gameKey === 'colors' || gameKey === 'animals') {
+      // Picture quizzes for the youngest: a streak of perfect rounds, no secret title
+      const key = `${gameKey}Streak`;
+      student.gameStats[key] = (score === total && total >= 10) ? (student.gameStats[key] || 0) + 1 : 0;
     } else if (gameKey === 'synonyms') {
       if (score === total && total >= 10) {
         student.gameStats.synonymsStreak = (student.gameStats.synonymsStreak || 0) + 1;
@@ -4562,6 +4668,7 @@ class Store {
     else if (gameKey === 'phrasal') currentStreak = student.gameStats.phrasalStreak || 0;
     else if (gameKey === 'mistakes') currentStreak = student.gameStats.mistakesStreak || 0;
     else if (gameKey === 'synonyms') currentStreak = student.gameStats.synonymsStreak || 0;
+    else if (gameKey === 'colors' || gameKey === 'animals') currentStreak = student.gameStats[`${gameKey}Streak`] || 0;
 
     return {
       newTitleUnlocked,

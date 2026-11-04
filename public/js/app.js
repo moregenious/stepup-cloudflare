@@ -24,12 +24,14 @@ import { TeacherCabinet } from './views/teacherCabinet.js';
 import { StudentCabinet } from './views/studentCabinet.js';
 import { VocabularyView } from './views/vocabularyView.js';
 import { PaymentsView } from './views/paymentsView.js';
+import { ContractsView } from './views/contractsView.js';
 import { AttendanceView } from './views/attendanceView.js';
 import { GamesView } from './views/gamesView.js';
 import { ShopView } from './views/shopView.js';
 import { HomeworkView } from './views/homeworkView.js';
 import { IrregularVerbsView } from './views/irregularVerbsView.js';
 import { SurveyView } from './views/surveyView.js';
+import { initTheme } from './theme.js';
 
 export class App {
   constructor() {
@@ -80,6 +82,7 @@ export class App {
   init() {
     window.app = this;
     modal.init();
+    initTheme();
 
     const NO_BACKGROUND_RELOAD_ROUTES = new Set([
       '#games',
@@ -341,6 +344,10 @@ export class App {
           <span class="nav-item-icon">💳</span>
           <span>Оплата обучения</span>
         </a>
+        <a href="#contracts" class="nav-item ${this.currentHash === '#contracts' ? 'active' : ''}">
+          <span class="nav-item-icon">📄</span>
+          <span>Договоры</span>
+        </a>
         <a href="#attendance" class="nav-item ${this.currentHash === '#attendance' ? 'active' : ''}">
           <span class="nav-item-icon">📅</span>
           <span>Посещаемость</span>
@@ -395,6 +402,10 @@ export class App {
         <a href="#payments" class="nav-item ${this.currentHash === '#payments' ? 'active' : ''}">
           <span class="nav-item-icon">💳</span>
           <span>Оплата обучения</span>
+        </a>
+        <a href="#contracts" class="nav-item ${this.currentHash === '#contracts' ? 'active' : ''}">
+          <span class="nav-item-icon">📄</span>
+          <span>Договоры</span>
         </a>
         <a href="#attendance" class="nav-item ${this.currentHash === '#attendance' ? 'active' : ''}">
           <span class="nav-item-icon">📅</span>
@@ -838,6 +849,9 @@ export class App {
           break;
         case '#payments':
           PaymentsView.render(container);
+          break;
+        case '#contracts':
+          ContractsView.render(container);
           break;
         case '#attendance':
           AttendanceView.render(container);

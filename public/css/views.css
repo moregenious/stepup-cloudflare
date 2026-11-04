@@ -815,6 +815,20 @@
   .file-attachment-badge .btn { display: none; }
 }
 
+/* Contracts section */
+.contract-list { display: flex; flex-direction: column; gap: 8px; }
+.contract-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg-card);
+}
+.contract-row.is-missing { border-left: 4px solid #ef4444; }
+.contract-row.is-signed { border-left: 4px solid #16a34a; }
+.contract-student { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 220px; }
+.contract-name { font-weight: 700; font-size: var(--font-size-sm); overflow-wrap: anywhere; }
+.contract-meta { font-size: var(--font-size-xs); color: var(--color-text-muted); overflow-wrap: anywhere; }
+.btn-toggle-contract { flex-shrink: 0; font-weight: 700; border-radius: var(--radius-full); border: 1.5px solid #ef4444; background: #fee2e2; color: #b91c1c; }
+.btn-toggle-contract.is-signed { border-color: #16a34a; background: #dcfce7; color: #15803d; }
+
 /* Mini-games: choice page and the bar above a running game */
 .games-choice-title { font-size: 1.05rem; font-weight: 800; margin: 0 0 var(--space-3); color: var(--color-text-main); }
 .games-choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
@@ -830,6 +844,26 @@
 .games-choice-name { font-weight: 800; font-size: 0.98rem; }
 .games-choice-desc { font-size: 0.78rem; color: var(--color-text-muted); margin-top: 2px; }
 .games-choice-streak { flex-shrink: 0; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #fef3c7; color: #92400e; }
+.games-choice-easy { display: inline-block; vertical-align: middle; margin-left: 4px; padding: 1px 7px; border-radius: 999px; background: #dcfce7; color: #15803d; font-size: 0.68rem; font-weight: 800; }
+
+/* Picture quizzes (colours, animals) */
+.picture-question { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: var(--space-4); margin-bottom: var(--space-4); border-radius: var(--radius-xl); background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1.5px solid #bae6fd; text-align: center; }
+.picture-swatch { display: inline-block; border-radius: 50%; background: var(--swatch); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18); }
+.picture-emoji { line-height: 1; display: inline-block; }
+.picture-word { font-size: 2.2rem; font-weight: 800; color: #0c4a6e; }
+.picture-prompt { font-size: 0.9rem; color: #075985; }
+.picture-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.picture-option {
+  min-height: 56px; padding: 10px; border-radius: var(--radius-lg); border: 2px solid var(--color-border);
+  background: var(--color-bg-card); color: var(--color-text-main); font-size: 1.1rem; font-weight: 800; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+.picture-options.is-pictures .picture-option { min-height: 96px; }
+.picture-option:hover { border-color: var(--color-primary); transform: translateY(-1px); }
+.picture-option.is-correct { border-color: #16a34a; background: #dcfce7; }
+.picture-option.is-wrong { border-color: #ef4444; background: #fee2e2; }
+.picture-feedback { min-height: 28px; margin-top: var(--space-3); font-weight: 700; text-align: center; }
+
 .games-play-topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: var(--space-3); }
 .games-play-name { font-weight: 800; font-size: 1rem; flex: 1; min-width: 0; }
 .games-play-stats { font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: #eef2ff; color: #3730a3; }
