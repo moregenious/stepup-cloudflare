@@ -254,8 +254,17 @@ function openGroupAwardModal(ctx, award) {
 
 /** Table: students × last lesson dates of the group */
 export function openAttendanceJournal(group, students) {
-  const recs = Object.values(store.state.attendance || {})
-    .filter(r => r && r.groupId === group.id && r.date)
+  // A joined lesson keeps one attendance record per group: the same date becomes one column
+  const groupIds = new Set(group.groupIds || [group.id]);
+  const byDate = new Map();
+  Object.values(store.state.attendance || {})
+    .filter(r => r && groupIds.has(r.groupId) && r.date)
+    .forEach(r => {
+      const day = byDate.get(r.date) || { date: r.date, marks: {} };
+      Object.assign(day.marks, r.marks || {});
+      byDate.set(r.date, day);
+    });
+  const recs = [...byDate.values()]
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-12);
   const dates = recs.map(r => r.date);

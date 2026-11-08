@@ -32,10 +32,127 @@ export const SCORING_TEMPLATES = {
   ]
 };
 
+const PAGE_SIZE = 100;
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Teachers type categories by hand: 'опоздание' and 'Опоздание' are one category
+const categoryKey = (r) => String(r.category || '').trim().toLowerCase();
+const normalize = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е');
+
 export const ScoringView = {
-  filterStudent: 'all',
-  filterCategory: 'all',
+  searchQuery: '',
+  filterGroup: 'all',
+  filterCategory: 'all', // categoryKey of a record
   filterType: 'all', // 'all' | 'add' | 'deduct'
+  visibleCount: PAGE_SIZE,
+
+  /** Records matching everything except the category (the category list is built from them) */
+  getBaseRecords() {
+    const words = normalize(this.searchQuery).split(/\s+/).filter(Boolean);
+    return store.getPointRecords().filter(r => {
+      const points = r.points || 0;
+      if (this.filterType === 'add' && points <= 0) return false;
+      if (this.filterType === 'deduct' && points >= 0) return false;
+      const student = store.getStudentById(r.studentId);
+      if (this.filterGroup !== 'all' && student?.groupId !== this.filterGroup) return false;
+      if (!words.length) return true;
+      const teacher = store.getTeacherById(r.teacherId);
+      const text = normalize(`${student?.fullName || ''} ${r.category || ''} ${r.comment || ''} ${teacher?.fullName || 'Администратор'}`);
+      return words.every(w => text.includes(w));
+    });
+  },
+
+  /** Every category that really occurs, with counts: rewards and deductions, the most used first */
+  renderCategoryOptions(baseRecords) {
+    const found = new Map();
+    baseRecords.forEach(r => {
+      const key = categoryKey(r);
+      const cat = found.get(key) || { key, count: 0, sum: 0, spellings: new Map() };
+      cat.count++;
+      cat.sum += Number(r.points) || 0;
+      const label = String(r.category || '').trim() || 'Без категории';
+      cat.spellings.set(label, (cat.spellings.get(label) || 0) + 1);
+      found.set(key, cat);
+    });
+    const label = (c) => [...c.spellings.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const list = [...found.values()].sort((a, b) => b.count - a.count);
+    const option = (c) => `<option value="${esc(c.key)}" ${this.filterCategory === c.key ? 'selected' : ''}>${esc(label(c))} (${c.count})</option>`;
+    const rewards = list.filter(c => c.sum >= 0);
+    const deductions = list.filter(c => c.sum < 0);
+    // A chosen category with no matches now stays in the list, otherwise the select would silently jump to "all"
+    const keepChosen = this.filterCategory !== 'all' && !found.has(this.filterCategory)
+      ? `<option value="${esc(this.filterCategory)}" selected>${esc(this.filterCategory || 'Без категории')} (0)</option>` : '';
+    return `
+      <option value="all" ${this.filterCategory === 'all' ? 'selected' : ''}>Все категории (${baseRecords.length})</option>
+      ${keepChosen}
+      ${rewards.length ? `<optgroup label="Поощрения (+)">${rewards.map(option).join('')}</optgroup>` : ''}
+      ${deductions.length ? `<optgroup label="Вычеты (−)">${deductions.map(option).join('')}</optgroup>` : ''}
+    `;
+  },
+
+  renderRows(records, isAdmin) {
+    if (!records.length) {
+      return `
+        <tr>
+          <td colspan="${isAdmin ? 7 : 6}" style="text-align:center; padding:var(--space-8);">
+            Записей о начислении или вычете баллов не найдено
+          </td>
+        </tr>
+      `;
+    }
+    return records.map(r => {
+      const student = store.getStudentById(r.studentId);
+      const teacher = store.getTeacherById(r.teacherId);
+      const isPositive = (r.points || 0) >= 0;
+
+      return `
+        <tr>
+          <td>
+            <div class="text-xs text-muted">${new Date(r.date).toLocaleDateString('ru-RU')}</div>
+          </td>
+          <td>
+            <div class="font-semibold">${student ? student.fullName : '—'}</div>
+            <div class="text-xs text-muted">${student ? formatGrade(student.grade) + ' • Баланс: ' + student.totalPoints + ' ⭐' : ''}</div>
+          </td>
+          <td>
+            <span class="badge ${isPositive ? 'badge-planned' : 'badge-cancelled'}">${esc(r.category) || 'Без категории'}</span>
+          </td>
+          <td>
+            ${isPositive ? `
+              <span class="badge badge-completed" style="font-size:0.85rem; font-weight:700;">+${r.points} ⭐</span>
+            ` : `
+              <span class="badge badge-cancelled" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; font-size:0.85rem; font-weight:700;">${r.points} ⭐</span>
+            `}
+          </td>
+          <td>${teacher ? teacher.fullName : 'Администратор'}</td>
+          <td>
+            <div style="max-width: 340px; font-size:var(--font-size-xs); color:var(--color-text-secondary);">${esc(r.comment) || '—'}</div>
+          </td>
+          ${isAdmin ? `
+            <td style="text-align:right;">
+              <button class="btn btn-ghost btn-sm btn-delete-score" data-id="${r.id}" title="Отменить операцию" style="color:var(--color-danger)">🗑️</button>
+            </td>
+          ` : ''}
+        </tr>
+      `;
+    }).join('');
+  },
+
+  /** Redraws the list only, so typing in the search box keeps its focus */
+  updateResults(container) {
+    const isAdmin = auth.isAdmin();
+    const base = this.getBaseRecords();
+    const records = this.filterCategory === 'all' ? base : base.filter(r => categoryKey(r) === this.filterCategory);
+    const total = records.reduce((sum, r) => sum + (Number(r.points) || 0), 0);
+
+    container.querySelector('#filter-score-category').innerHTML = this.renderCategoryOptions(base);
+    container.querySelector('#score-results-summary').textContent =
+      `Найдено записей: ${records.length} • Итого: ${total > 0 ? '+' : ''}${total} ⭐`;
+    container.querySelector('#score-rows').innerHTML = this.renderRows(records.slice(0, this.visibleCount), isAdmin);
+    const more = container.querySelector('#btn-score-more');
+    const left = records.length - this.visibleCount;
+    more.style.display = left > 0 ? '' : 'none';
+    more.textContent = `Показать ещё (осталось ${left})`;
+  },
 
   render(container) {
     if (!auth.isAuthenticated() || auth.isStudent()) {
@@ -44,21 +161,7 @@ export const ScoringView = {
     }
 
     const isAdmin = auth.isAdmin();
-    const students = store.getStudents();
-
-    let records = store.getPointRecords();
-
-    if (this.filterStudent !== 'all') {
-      records = records.filter(r => r.studentId === this.filterStudent);
-    }
-    if (this.filterCategory !== 'all') {
-      records = records.filter(r => r.category === this.filterCategory);
-    }
-    if (this.filterType === 'add') {
-      records = records.filter(r => (r.points || 0) > 0);
-    } else if (this.filterType === 'deduct') {
-      records = records.filter(r => (r.points || 0) < 0);
-    }
+    const groups = store.getGroups();
 
     container.innerHTML = `
       <div class="section-header">
@@ -79,9 +182,26 @@ export const ScoringView = {
       </div>
 
       <!-- Filters -->
-      <div class="filter-bar">
+      <div class="filter-bar score-filter-bar">
+        <div class="filter-item score-search-item">
+          <input type="search" id="score-search" class="form-control" placeholder="🔍 Имя, категория, комментарий" title="Поиск по ученику, категории, комментарию и преподавателю" value="${esc(this.searchQuery)}" autocomplete="off">
+        </div>
+
         <div class="filter-item">
-          <label class="form-label" style="margin:0; font-size:var(--font-size-xs);">Тип операции:</label>
+          <label class="form-label" style="margin:0; font-size:var(--font-size-xs);">Группа:</label>
+          <select id="filter-score-group" class="form-control">
+            <option value="all">Все группы</option>
+            ${groups.map(g => `<option value="${g.id}" ${this.filterGroup === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
+          </select>
+        </div>
+
+        <div class="filter-item">
+          <label class="form-label" style="margin:0; font-size:var(--font-size-xs);">Категория:</label>
+          <select id="filter-score-category" class="form-control"></select>
+        </div>
+
+        <div class="filter-item">
+          <label class="form-label" style="margin:0; font-size:var(--font-size-xs);">Тип:</label>
           <select id="filter-score-type" class="form-control">
             <option value="all" ${this.filterType === 'all' ? 'selected' : ''}>Все операции</option>
             <option value="add" ${this.filterType === 'add' ? 'selected' : ''}>➕ Только начисления (+)</option>
@@ -89,42 +209,10 @@ export const ScoringView = {
           </select>
         </div>
 
-        <div class="filter-item">
-          <label class="form-label" style="margin:0; font-size:var(--font-size-xs);">Ученик:</label>
-          <select id="filter-score-student" class="form-control">
-            <option value="all" ${this.filterStudent === 'all' ? 'selected' : ''}>Все ученики</option>
-            ${students.map(s => `<option value="${s.id}" ${this.filterStudent === s.id ? 'selected' : ''}>${s.fullName} (${formatGrade(s.grade)}, ${s.totalPoints} ⭐)</option>`).join('')}
-          </select>
-        </div>
-
-        <div class="filter-item">
-          <label class="form-label" style="margin:0; font-size:var(--font-size-xs);">Категория:</label>
-          <select id="filter-score-category" class="form-control">
-            <option value="all" ${this.filterCategory === 'all' ? 'selected' : ''}>Все категории</option>
-            <optgroup label="Поощрения (+)">
-              <option value="Активность" ${this.filterCategory === 'Активность' ? 'selected' : ''}>Активность на уроке</option>
-              <option value="Домашнее задание" ${this.filterCategory === 'Домашнее задание' ? 'selected' : ''}>Домашнее задание</option>
-              <option value="Спикинг / Speaking" ${this.filterCategory === 'Спикинг / Speaking' ? 'selected' : ''}>Спикинг / Speaking</option>
-              <option value="Словарный запас" ${this.filterCategory === 'Словарный запас' ? 'selected' : ''}>Словарный запас</option>
-              <option value="Работа в команде" ${this.filterCategory === 'Работа в команде' ? 'selected' : ''}>Работа в команде</option>
-              <option value="Тест" ${this.filterCategory === 'Тест' ? 'selected' : ''}>Тест / Квиз</option>
-              <option value="Разговорный клуб" ${this.filterCategory === 'Разговорный клуб' ? 'selected' : ''}>Разговорный клуб</option>
-              <option value="Экзамен" ${this.filterCategory === 'Экзамен' ? 'selected' : ''}>Экзамен / Mock test</option>
-            </optgroup>
-            <optgroup label="Вычеты (-)">
-              <option value="Несданное ДЗ" ${this.filterCategory === 'Несданное ДЗ' ? 'selected' : ''}>Несданное ДЗ</option>
-              <option value="Несданное ДЗ / Использование ИИ" ${this.filterCategory === 'Несданное ДЗ / Использование ИИ' ? 'selected' : ''}>Несданное ДЗ (Использование ИИ)</option>
-              <option value="Нарушение правил" ${this.filterCategory === 'Нарушение правил' ? 'selected' : ''}>Нарушение правил / Дисциплина</option>
-              <option value="Использование телефона" ${this.filterCategory === 'Использование телефона' ? 'selected' : ''}>Использование телефона</option>
-              <option value="Помеха на уроке" ${this.filterCategory === 'Помеха на уроке' ? 'selected' : ''}>Помеха на уроке</option>
-              <option value="Опоздание" ${this.filterCategory === 'Опоздание' ? 'selected' : ''}>Опоздание на урок</option>
-              <option value="Пропуск занятия" ${this.filterCategory === 'Пропуск занятия' ? 'selected' : ''}>Пропуск занятия</option>
-              <option value="Списание / Приз" ${this.filterCategory === 'Списание / Приз' ? 'selected' : ''}>Списание баллов (Приз)</option>
-              <option value="Корректировка" ${this.filterCategory === 'Корректировка' ? 'selected' : ''}>Корректировка</option>
-            </optgroup>
-          </select>
-        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-score-reset">✕ Сбросить</button>
       </div>
+
+      <div class="score-results-summary" id="score-results-summary"></div>
 
       <!-- Scores Table & Timeline -->
       <div class="card" style="padding: 0; overflow:hidden;">
@@ -141,90 +229,74 @@ export const ScoringView = {
                 ${isAdmin ? `<th style="text-align:right;">Действие</th>` : ''}
               </tr>
             </thead>
-            <tbody>
-              ${records.length === 0 ? `
-                <tr>
-                  <td colspan="${isAdmin ? 7 : 6}" style="text-align:center; padding:var(--space-8);">
-                    Записей о начислении или вычете баллов не найдено
-                  </td>
-                </tr>
-              ` : records.map(r => {
-                const student = store.getStudentById(r.studentId);
-                const teacher = store.getTeacherById(r.teacherId);
-                const isPositive = (r.points || 0) >= 0;
-
-                return `
-                  <tr>
-                    <td>
-                      <div class="text-xs text-muted">${new Date(r.date).toLocaleDateString('ru-RU')}</div>
-                    </td>
-                    <td>
-                      <div class="font-semibold">${student ? student.fullName : '—'}</div>
-                      <div class="text-xs text-muted">${student ? formatGrade(student.grade) + ' • Баланс: ' + student.totalPoints + ' ⭐' : ''}</div>
-                    </td>
-                    <td>
-                      <span class="badge ${isPositive ? 'badge-planned' : 'badge-cancelled'}">${r.category}</span>
-                    </td>
-                    <td>
-                      ${isPositive ? `
-                        <span class="badge badge-completed" style="font-size:0.85rem; font-weight:700;">+${r.points} ⭐</span>
-                      ` : `
-                        <span class="badge badge-cancelled" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; font-size:0.85rem; font-weight:700;">${r.points} ⭐</span>
-                      `}
-                    </td>
-                    <td>${teacher ? teacher.fullName : 'Администратор'}</td>
-                    <td>
-                      <div style="max-width: 340px; font-size:var(--font-size-xs); color:var(--color-text-secondary);">${r.comment || '—'}</div>
-                    </td>
-                    ${isAdmin ? `
-                      <td style="text-align:right;">
-                        <button class="btn btn-ghost btn-sm btn-delete-score" data-id="${r.id}" title="Отменить операцию" style="color:var(--color-danger)">🗑️</button>
-                      </td>
-                    ` : ''}
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
+            <tbody id="score-rows"></tbody>
           </table>
         </div>
       </div>
+      <button type="button" class="btn btn-secondary" id="btn-score-more" style="display:none; width:100%; margin-top: var(--space-3);"></button>
     `;
 
+    this.updateResults(container);
     this.bindEvents(container);
   },
 
   bindEvents(container) {
-    container.querySelector('#filter-score-type')?.addEventListener('change', (e) => {
-      this.filterType = e.target.value;
-      this.render(container);
+    const refilter = () => {
+      this.visibleCount = PAGE_SIZE;
+      this.updateResults(container);
+    };
+
+    container.querySelector('#score-search')?.addEventListener('input', (e) => {
+      this.searchQuery = e.target.value;
+      refilter();
     });
 
-    container.querySelector('#filter-score-student')?.addEventListener('change', (e) => {
-      this.filterStudent = e.target.value;
-      this.render(container);
+    container.querySelector('#filter-score-type')?.addEventListener('change', (e) => {
+      this.filterType = e.target.value;
+      refilter();
+    });
+
+    container.querySelector('#filter-score-group')?.addEventListener('change', (e) => {
+      this.filterGroup = e.target.value;
+      refilter();
     });
 
     container.querySelector('#filter-score-category')?.addEventListener('change', (e) => {
       this.filterCategory = e.target.value;
+      refilter();
+    });
+
+    container.querySelector('#btn-score-reset')?.addEventListener('click', () => {
+      this.searchQuery = '';
+      this.filterGroup = 'all';
+      this.filterCategory = 'all';
+      this.filterType = 'all';
+      this.visibleCount = PAGE_SIZE;
       this.render(container);
+    });
+
+    container.querySelector('#btn-score-more')?.addEventListener('click', () => {
+      this.visibleCount += PAGE_SIZE;
+      this.updateResults(container);
     });
 
     container.querySelector('#btn-award-points')?.addEventListener('click', () => this.openPointsModal('add', container));
     container.querySelector('#btn-deduct-points')?.addEventListener('click', () => this.openPointsModal('deduct', container));
 
-    container.querySelectorAll('.btn-delete-score').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        if (!auth.isAuthenticated() || auth.isStudent()) {
-          toast.error('Операция запрещена');
-          return;
-        }
-        const id = e.currentTarget.getAttribute('data-id');
-        if (confirm('Отменить эту операцию с баллами? Баланс ученика будет пересчитан.')) {
-          store.deletePointRecord(id);
-          toast.info('Операция отменена, баланс пересчитан');
-          this.render(container);
-        }
-      });
+    // The rows are redrawn while searching, so the click is handled on the table body
+    container.querySelector('#score-rows')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-delete-score');
+      if (!btn) return;
+      if (!auth.isAuthenticated() || auth.isStudent()) {
+        toast.error('Операция запрещена');
+        return;
+      }
+      const id = btn.getAttribute('data-id');
+      if (confirm('Отменить эту операцию с баллами? Баланс ученика будет пересчитан.')) {
+        store.deletePointRecord(id);
+        toast.info('Операция отменена, баланс пересчитан');
+        this.render(container);
+      }
     });
   },
 

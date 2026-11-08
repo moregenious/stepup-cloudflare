@@ -1,7 +1,8 @@
 /* Dark theme: <html data-theme="dark"> (set in index.html from the saved choice or the device setting, toggled by the header button).
    Variables first; then the light colours that views write inline (style="background:#fff…"). */
+:root[data-theme="light"] { color-scheme: only light; }
 :root[data-theme="dark"] {
-  color-scheme: dark;
+  color-scheme: only dark;
   --color-bg-app: #0b1120;
   --color-bg-card: #131c2e;
   --color-bg-input: #0f172a;

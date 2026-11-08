@@ -15,6 +15,8 @@ export function currentTheme() {
 
 function apply(theme) {
   document.documentElement.setAttribute('data-theme', theme);
+  // 'only': the phone's own dark mode must not repaint the page on top of our theme
+  document.getElementById('meta-color-scheme')?.setAttribute('content', theme === 'dark' ? 'only dark' : 'only light');
   const btn = document.getElementById('btn-theme-toggle');
   if (btn) {
     btn.textContent = theme === 'dark' ? '☀️' : '🌙';

@@ -399,6 +399,29 @@ function sameDay(dateIso, refDate, toleranceDays = 1) {
 }
 
 /**
+ * The birthday present: once a year, on the birthday or within 14 days after it (the student may not open the site
+ * that day). Day and month only: the year in the survey is often wrong. Returns the refusal, or marks the year as given;
+ * the mark stays when the record is deleted, so a removed present is not given again.
+ */
+function claimBirthdayPresent(student, now) {
+  const m = String(student.birthDate || '').match(/^\d{4}-(\d{1,2})-(\d{1,2})/) || String(student.birthDate || '').match(/^(\d{1,2})[./](\d{1,2})/);
+  if (!m) return 'Не указана дата рождения';
+  const [month, day] = /^\d{4}-/.test(student.birthDate) ? [Number(m[1]), Number(m[2])] : [Number(m[2]), Number(m[1])];
+  let year = now.getUTCFullYear();
+  let bd = Date.UTC(year, month - 1, day);
+  if (bd > now.getTime() + 86400000) { year -= 1; bd = Date.UTC(year, month - 1, day); }
+  const daysAgo = (now.getTime() - bd) / 86400000;
+  if (daysAgo < -1 || daysAgo > 15) return 'День рождения ученика был не в последние две недели';
+  if (student.lastBirthdayBonusYear === year) return 'Бонус ко дню рождения уже начислен в этом году';
+  student.lastBirthdayBonusYear = year;
+  return null;
+}
+
+/** The present a staff browser gives automatically (store.checkAndAwardBirthdayBonus), not a record typed by hand */
+const isAutoBirthdayPresent = (rec) => isPlainObject(rec) && rec.category === 'День рождения'
+  && String(rec.comment || '').startsWith('🎂 Подарок от Step Up English');
+
+/**
  * Rules for point records a student creates from their own cabinet (survey bonus, birthday, mini-games).
  */
 function validateStudentPointRecord(rec, student, now) {
@@ -420,19 +443,9 @@ function validateStudentPointRecord(rec, student, now) {
       student.surveyBonusAwarded = true;
       return out;
     case 'День рождения': {
-      // 200 points once a year, on the birthday or within 14 days after it (the student may not open the site that day).
-      // Day and month only: the year in the survey is often wrong.
       if (points !== 200) return 'Неверная сумма бонуса';
-      const m = String(student.birthDate || '').match(/^\d{4}-(\d{1,2})-(\d{1,2})/) || String(student.birthDate || '').match(/^(\d{1,2})[./](\d{1,2})/);
-      if (!m) return 'Не указана дата рождения';
-      const [month, day] = /^\d{4}-/.test(student.birthDate) ? [Number(m[1]), Number(m[2])] : [Number(m[2]), Number(m[1])];
-      let year = now.getUTCFullYear();
-      let bd = Date.UTC(year, month - 1, day);
-      if (bd > now.getTime() + 86400000) { year -= 1; bd = Date.UTC(year, month - 1, day); }
-      const daysAgo = (now.getTime() - bd) / 86400000;
-      if (daysAgo < -1 || daysAgo > 15) return 'День рождения ученика был не в последние две недели';
-      if (student.lastBirthdayBonusYear === year) return 'Бонус ко дню рождения уже начислен в этом году';
-      student.lastBirthdayBonusYear = year;
+      const refused = claimBirthdayPresent(student, now);
+      if (refused) return refused;
       out.excludeFromRating = true;
       return out;
     }
@@ -710,6 +723,13 @@ export async function push(user, rawOps) {
       }
 
       if (op.c === 'pointRecords') {
+        if (!existing && isAutoBirthdayPresent(next)) {
+          const skey = shardKeyFor('students', String(next.studentId || ''));
+          const st = findRowInShard(shards[skey], String(next.studentId));
+          const refused = st ? claimBirthdayPresent(st, now) : 'Ученик не найден в базе';
+          if (refused) { reject(res, refused); continue; }
+          writeRow(skey, st.id, st);
+        }
         addContribution(pointContribution(existing), -1);
         addContribution(pointContribution(next), +1);
       }

@@ -5012,3 +5012,31 @@ tr.selected-row {
 .avatar-viewer-name { color: #fff; font-size: 1.4rem; font-weight: 800; text-align: center; }
 .avatar-viewer-hint { color: rgba(255,255,255,0.55); font-size: 0.8rem; }
 @keyframes avatarViewerIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+
+/* Scoring: search and results summary */
+.score-search-item {
+  flex: 1 1 280px;
+}
+
+.score-search-item input {
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.score-results-summary {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 768px) {
+  .score-filter-bar .filter-item .form-label {
+    flex: 0 0 76px;
+  }
+
+  .score-filter-bar .filter-item select {
+    flex: 1;
+    min-width: 0;
+  }
+}

@@ -163,6 +163,27 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   await call('/api/push', { cookie: student.cookie, body: { ops: [bdayRec('pt-bday-3', 200)] } });
   assert.equal(rowsOf(await call('/api/state', { body: { known: {} }, cookie: student.cookie }), 'pointRecords').some(r => r.id === 'pt-bday-3'), false, 'not 40 days after the birthday');
 
+  // Present from staff browsers: only the first is accepted, a deleted present does not come back, hand-made gifts stay free
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400000);
+  await call('/api/push', { cookie: admin.cookie, body: { ops: [{ c: 'students', id: 'stu-3', t: 'patch', set: [[['birthDate'], `2016-${String(twoDaysAgo.getUTCMonth() + 1).padStart(2, '0')}-${String(twoDaysAgo.getUTCDate()).padStart(2, '0')}`]], unset: [] }] } });
+  const staffGift = (id, comment = '🎂 Подарок от Step Up English на день рождения!') => ({ c: 'pointRecords', id, t: 'put', v: { id, studentId: 'stu-3', teacherId: 'admin', type: 'add', points: 200, category: 'День рождения', comment, date: new Date().toISOString() } });
+  const staffPush = async (op) => (await call('/api/push', { cookie: admin.cookie, body: { ops: [op] } })).json.results[0];
+  const pointsOfStu3 = async () => {
+    const s = rowsOf(await call('/api/state', { body: { known: {} }, cookie: admin.cookie }), 'students').find(x => x.id === 'stu-3');
+    return [s.totalPoints, s.lastBirthdayBonusYear];
+  };
+  assert.equal((await staffPush(staffGift('pt-gift-1'))).ok, true, 'first present is accepted');
+  assert.deepEqual(await pointsOfStu3(), [200, twoDaysAgo.getUTCFullYear()], 'the server remembers the year');
+  assert.equal((await staffPush(staffGift('pt-gift-1'))).ok, true, 'a repeated send of the same record is harmless');
+  const secondGift = await staffPush(staffGift('pt-gift-2'));
+  assert.equal(secondGift.ok, false, 'second device, older data: refused');
+  assert.match(secondGift.reason, /уже начислен/);
+  assert.equal((await pointsOfStu3())[0], 200, 'the balance holds one present');
+  assert.equal((await staffPush({ c: 'pointRecords', id: 'pt-gift-1', t: 'del' })).ok, true);
+  assert.equal((await staffPush(staffGift('pt-gift-3'))).ok, false, 'a deleted present is not given again');
+  assert.equal((await pointsOfStu3())[0], 0);
+  assert.equal((await staffPush(staffGift('pt-gift-hand', 'С днём рождения от учителя'))).ok, true, 'a gift by hand is not limited');
+
   // Files: staff upload, range download, auth required, students only avatars
   const bytes = new Uint8Array(1000).map((_, i) => i % 256);
   const up = await call('/api/files?name=' + encodeURIComponent('Unit 1 audio.mp3') + '&folder=audio', {

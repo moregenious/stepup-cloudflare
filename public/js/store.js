@@ -213,7 +213,8 @@ class Store {
       getState: () => this.state,
       setState: (next) => {
         this.state = next;
-        this._serverSynced = true;
+        // Not while the state is only the browser's cache: automatic awards would be decided on old data
+        this._serverSynced = this.sync.fresh;
       },
       materialize: (next) => this.materialize(next),
       beforeDiff: (st) => this.prepareForDiff(st),
@@ -360,6 +361,8 @@ class Store {
   handleRejectedChanges(results) {
     const reasons = [...new Set((results || []).map(r => r.reason).filter(Boolean))];
     logger.warn('Server rejected changes: ' + reasons.join('; '));
+    // Another device gave the birthday present first: nothing went wrong and nobody asked for it by hand
+    if (reasons.length && reasons.every(r => r === 'Бонус ко дню рождения уже начислен в этом году')) return;
     try {
       toast.warning('Часть изменений не сохранена: ' + (reasons.slice(0, 2).join('; ') || 'нет прав'));
     } catch (e) { /* ignore */ }
@@ -3984,6 +3987,8 @@ class Store {
     const occ = student ? this.birthdayOccurrence(student) : null;
     if (!occ || occ.daysAgo > BIRTHDAY_WINDOW_DAYS || occ.date < BIRTHDAY_AUTO_FROM) return { isBirthday: false, awarded: false };
     const isBirthday = occ.daysAgo === 0;
+    // The cabinet may be drawn from the browser cache first: decide on the server data, it is redrawn when they come
+    if (!this._serverSynced) return { isBirthday, awarded: false, student };
 
     if (student.lastBirthdayBonusYear === occ.year) {
       return { isBirthday, awarded: false, alreadyAwardedThisYear: true, student };

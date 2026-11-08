@@ -10,12 +10,13 @@ import { MONTH_NAMES } from '../data/seedData.js';
 import { renderStudentAvatarHtml, openCustomizationModal } from '../components/avatarCustomization.js';
 
 export const StudentCabinet = {
-  selectedMonthKey: '2026-10',
+  selectedMonthKey: null, // null = the current month (the choice is kept only until the page is left)
   leaderboardScope: 'group', // 'group' | 'school'
 
   renderLeaderboardHtml(student, group, selectedKey) {
     const academicMonths = store.getAcademicMonthsList();
-    const currentMonth = academicMonths.find(m => m.key === selectedKey) || academicMonths[0];
+    const currentMonth = academicMonths.find(m => m.key === selectedKey) || store.getCurrentAcademicMonth();
+    selectedKey = currentMonth.key;
     
     const isSchoolScope = this.leaderboardScope === 'school';
     const leaderboard = isSchoolScope

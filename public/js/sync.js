@@ -177,6 +177,7 @@ export class SyncEngine {
     this.shards = {};
     this.base = null;
     this.ready = false;
+    this.fresh = false;        // the server has answered: the state is no longer just the browser's old copy
     this.chain = Promise.resolve();
     this.pushTimer = null;
     this.retryTimer = null;
@@ -222,6 +223,7 @@ export class SyncEngine {
     this.shards = {};
     this.base = null;
     this.ready = false;
+    this.fresh = false;
     this.remoteMeta = null;
     this.sent.clear();
     this.dirty = false;
@@ -343,7 +345,9 @@ export class SyncEngine {
     const body = want ? { want } : { known: this.knownRevs() };
     const resp = await apiRequest('/api/state', { body });
     const changed = this.applyShardResponse(resp.shards, { fullKeys: resp.keys || null });
-    if (changed || !this.base) {
+    const firstAnswer = !this.fresh;
+    this.fresh = true;
+    if (changed || !this.base || firstAnswer) {
       this.rebase();
       this.saveCache();
     }

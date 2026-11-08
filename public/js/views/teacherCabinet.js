@@ -197,8 +197,35 @@ export const TeacherCabinet = {
 
     const isLiveNow = Boolean(liveLesson);
 
+    // Joined lessons of this week (several groups taught together, e.g. on Saturday): one entry with all their students,
+    // so points and attendance need no switching between the groups. Selector value: 'joint:<lesson id>'.
+    const jointKey = (l) => 'joint:' + (l.baseId || l.id);
+    const jointLessons = [];
+    currentWeekSchedule.forEach(l => {
+      if (!l.isJoined || !l.groupId || l.status === 'cancelled' || l.isVacationPaused) return;
+      if (jointLessons.some(j => j.key === jointKey(l))) return;
+      const groupIds = [l.groupId, ...(l.linkedGroupIds || [])];
+      // Group names here carry their schedules ("Fly High 4 среда 11:00-12:00 суббота …"): a short title instead
+      const books = [...new Set(groupIds.map(id => store.getGroupById(id)?.textbook).filter(Boolean))];
+      jointLessons.push({
+        key: jointKey(l), lesson: l, groupIds,
+        name: `${books.join(' / ') || 'Группы'} · объединённый урок`,
+        when: `${l.dayShort || ''} ${l.time || ''}`.trim(),
+        groupNames: groupIds.map(id => store.getGroupById(id)?.name).filter(Boolean)
+      });
+    });
+    const jointFor = (l) => (l && l.isJoined ? jointLessons.find(j => j.key === jointKey(l)) || null : null);
+
+    let activeJoint = null;
+    if (String(this.selectedGroupId || '').startsWith('joint:')) {
+      activeJoint = jointLessons.find(j => j.key === this.selectedGroupId) || null;
+    } else if (!this.selectedGroupId) {
+      // Nothing chosen: the lesson that is on now (or next, or just finished), joined lessons included
+      activeJoint = jointFor(liveLesson || upcomingLesson || lastCompletedLesson);
+    }
+
     // Determine active group to display
-    let activeGroupId = this.selectedGroupId;
+    let activeGroupId = activeJoint ? activeJoint.lesson.groupId : this.selectedGroupId;
     if (!activeGroupId || !myGroups.some(g => g.id === activeGroupId)) {
       if (liveLesson && liveLesson.groupId) {
         activeGroupId = liveLesson.groupId;
@@ -211,9 +238,21 @@ export const TeacherCabinet = {
       }
     }
 
-    const activeGroup = myGroups.find(g => g.id === activeGroupId) || myGroups[0] || null;
-    const activeGroupStudents = activeGroup ? store.getStudentsByGroupId(activeGroup.id) : [];
-    const activeGroupSchedule = activeGroup ? store.getGroupScheduleSummary(activeGroup.id) : { days: '', time: '', full: '—' };
+    const baseGroup = myGroups.find(g => g.id === activeGroupId) || myGroups[0] || null;
+    // A joined lesson is shown as one group: all the names and all the students (each stays in their own group in the data)
+    const activeGroup = activeJoint && baseGroup ? {
+      ...baseGroup,
+      name: activeJoint.name,
+      groupIds: activeJoint.groupIds,
+      textbook: [...new Set(activeJoint.groupIds.map(id => store.getGroupById(id)?.textbook).filter(Boolean))].join(' / ')
+    } : baseGroup;
+    const studentsOfActive = () => (activeJoint
+      ? store.getLessonStudents(activeJoint.lesson)
+      : (activeGroup ? store.getStudentsByGroupId(activeGroup.id) : []));
+    const activeGroupStudents = studentsOfActive();
+    const activeGroupSchedule = activeJoint
+      ? { days: activeJoint.lesson.dayShort || '', time: activeJoint.lesson.time || '', full: activeJoint.when }
+      : activeGroup ? store.getGroupScheduleSummary(activeGroup.id) : { days: '', time: '', full: '—' };
 
     if (!this.selectedStudentIds) {
       this.selectedStudentIds = new Set(activeGroupStudents.map(s => s.id));
@@ -226,12 +265,14 @@ export const TeacherCabinet = {
     }
 
     // Check if activeGroup has a scheduled lesson TODAY
-    const groupLessonToday = activeGroup ? (todayLessons.find(l => l.groupId === activeGroup.id) || null) : null;
+    const groupLessonToday = activeJoint
+      ? (todayLessons.find(l => jointKey(l) === activeJoint.key) || null)
+      : activeGroup ? (todayLessons.find(l => l.groupId === activeGroup.id) || null) : null;
     const isThisGroupLive = Boolean(liveLesson && groupLessonToday && liveLesson.id === groupLessonToday.id);
     const isThisGroupUpcoming = Boolean(!isThisGroupLive && groupLessonToday && parseTimeRange(groupLessonToday.time)?.start > currentMinutes);
 
     // activeLesson: today's lesson if one exists for this group; otherwise look up general planned lesson for materials reference
-    const activeLesson = groupLessonToday || (activeGroup ? (
+    const activeLesson = groupLessonToday || (activeJoint ? activeJoint.lesson : null) || (activeGroup ? (
       mySchedule.find(l => l.groupId === activeGroup.id && l.status === 'planned') ||
       mySchedule.find(l => l.groupId === activeGroup.id) || null
     ) : null);
@@ -377,7 +418,8 @@ export const TeacherCabinet = {
               <span>📚 <strong>Учебник:</strong> ${activeGroup?.textbook || '—'}</span>
               <span>⏰ <strong>Время:</strong> ${groupLessonToday ? groupLessonToday.time : (activeGroupSchedule.full || '—')}</span>
               <span>🏫 <strong>Кабинет:</strong> ${activeGroup?.classroom || 'Каб.'}</span>
-              <span>👨‍🎓 <strong>В группе:</strong> ${activeGroupStudents.length} уч.</span>
+              <span>👨‍🎓 <strong>${activeJoint ? 'На уроке' : 'В группе'}:</strong> ${activeGroupStudents.length} уч.</span>
+              ${activeJoint ? `<span>🔗 <strong>Вместе:</strong> ${activeJoint.groupNames.join(' • ')}</span>` : ''}
             </div>
 
             ${groupLessonToday ? `
@@ -402,17 +444,24 @@ export const TeacherCabinet = {
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
               <label for="select-cabinet-active-group" class="text-xs text-muted" style="font-weight:600; white-space:nowrap;">Группа:</label>
               <select id="select-cabinet-active-group" class="form-control form-control-sm" style="font-weight:700; min-width:190px;">
+                ${jointLessons.length ? `<optgroup label="Объединённые уроки">${jointLessons.map(j => {
+                  const isLiveJ = Boolean(liveLesson && jointFor(liveLesson) === j);
+                  const isTodayJ = todayLessons.some(l => jointFor(l) === j);
+                  const tag = isLiveJ ? '🟢 Идет · ' : isTodayJ ? '⏰ сегодня · ' : '';
+                  return `<option value="${j.key}" ${activeJoint === j ? 'selected' : ''}>🔗 ${j.name.replace(' · объединённый урок', '')} · ${j.when} (${tag}${j.groupIds.length} гр., ${store.getLessonStudents(j.lesson).length} уч.)</option>`;
+                }).join('')}</optgroup><optgroup label="Группы">` : ''}
                 ${myGroups.map(g => {
                   const gToday = todayLessons.find(l => l.groupId === g.id);
                   const isLiveG = liveLesson && liveLesson.groupId === g.id;
                   const gSched = store.getGroupScheduleSummary(g.id);
                   const tag = isLiveG ? '🟢 Идет' : gToday ? `⏰ ${gToday.time}` : (gSched.days ? `${gSched.days} ${gSched.time}` : '—');
                   return `
-                    <option value="${g.id}" ${activeGroup && activeGroup.id === g.id ? 'selected' : ''}>
+                    <option value="${g.id}" ${!activeJoint && activeGroup && activeGroup.id === g.id ? 'selected' : ''}>
                       ${g.name} (${tag})
                     </option>
                   `;
                 }).join('')}
+                ${jointLessons.length ? '</optgroup>' : ''}
               </select>
               ${activeGroup ? `
                 <button type="button" class="btn btn-xs btn-primary btn-cabinet-open-classroom" data-gid="${activeGroup.id}" title="Перейти в кабинет класса: турнирная таблица и статус мини-игр">
@@ -629,18 +678,18 @@ export const TeacherCabinet = {
       </div>
     `;
 
-    this.bindEvents(container, teacher, { activeGroup, activeGroupStudents, activeLesson, currMonth });
+    this.bindEvents(container, teacher, { activeGroup, activeGroupStudents, activeLesson, currMonth, studentsOfActive });
   },
 
   bindEvents(container, teacher, context = {}) {
-    const { activeGroup, activeGroupStudents = [], activeLesson, currMonth = store.getCurrentAcademicMonth() } = context;
+    const { activeGroup, activeGroupStudents = [], activeLesson, currMonth = store.getCurrentAcademicMonth(), studentsOfActive = null } = context;
 
     // Lesson mode (re-renders only its own block so the page does not jump)
     const lmMount = container.querySelector('#lesson-mode-mount');
     if (lmMount && activeGroup) {
       const lmCtx = { group: activeGroup, lesson: activeLesson, students: activeGroupStudents, teacher, currMonth };
       const lmRender = () => {
-        lmCtx.students = store.getStudentsByGroupId(activeGroup.id);
+        lmCtx.students = studentsOfActive ? studentsOfActive() : store.getStudentsByGroupId(activeGroup.id);
         lmMount.innerHTML = renderLessonModeHtml(lmCtx);
         bindLessonMode(lmMount, lmCtx, { rerender: lmRender, openStudentModal: (sid, mode) => this.openStudentScoringModal(sid, mode === 'deduct' ? 'deduct' : 'add', container) });
       };

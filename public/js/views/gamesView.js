@@ -1322,13 +1322,13 @@ export const GamesView = {
           </div>
         </div>
 
-        <!-- Sentence Card with highlighted verb phrase -->
+        <!-- Sentence card: no hints, the student finds the verb and the markers alone -->
         <div style="background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border: 1.5px solid #fed7aa; border-radius: var(--radius-xl); padding: var(--space-5); margin-bottom: var(--space-4); text-align: center;">
           <div style="font-size: 0.8rem; font-weight: 700; color: #c2410c; text-transform: uppercase; margin-bottom: 6px;">
             Определите грамматическое время в предложении:
           </div>
           <div style="font-size: 1.35rem; font-weight: 800; color: #7c2d12; line-height: 1.5; margin-bottom: 8px;">
-            ${q.sentence.sentence.replace(q.sentence.highlight, `<span style="background: #fed7aa; color: #9a3412; padding: 2px 6px; border-radius: 4px; text-decoration: underline; text-decoration-color: #ea580c;">${q.sentence.highlight}</span>`)}
+            ${q.sentence.sentence}
           </div>
           <div style="font-size: 0.95rem; color: #9a3412; font-style: italic;">
             🇷🇺 ${q.sentence.translation}

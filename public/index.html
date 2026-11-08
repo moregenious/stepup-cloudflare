@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- The site draws both themes itself: phones must not darken it on their own (it repaints the colour game) -->
+  <meta name="color-scheme" id="meta-color-scheme" content="only light">
   <!-- Theme before the first paint (no white flash): saved choice, otherwise the device setting -->
   <script>
     (function () {
@@ -10,6 +12,8 @@
       try { saved = localStorage.getItem('stepup_theme'); } catch (e) {}
       var dark = saved ? saved === 'dark' : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      var meta = document.getElementById('meta-color-scheme');
+      if (meta) meta.setAttribute('content', dark ? 'only dark' : 'only light');
     })();
   </script>
   <title>Step Up English — Курсы английского языка</title>
