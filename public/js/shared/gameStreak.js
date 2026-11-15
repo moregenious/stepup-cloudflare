@@ -17,7 +17,8 @@ export const GAME_RULES = Object.freeze({
   MAX: 300,
   DAYS_PER_LEVEL: 1,
   MIN_DAILY_SCORE: 10,
-  MAX_PER_GAME: 100,
+  MAX_PER_GAME: 10, // every round has 10 tasks
+  MIN_ROUND_GAP_SEC: 8, // two counted rounds less than 8 s apart = the same round sent twice
   TZ_OFFSET_MIN: 300,
   FREEZE_PRICE: 150,
   MAX_FREEZES: 3
@@ -74,7 +75,8 @@ export function normalizeLedger(raw) {
     level,
     n: num(gl.n),
     freezes: num(gl.freezes, 0, GAME_RULES.MAX_FREEZES),
-    frozen: Array.isArray(gl.frozen) ? gl.frozen.filter(isDay).slice(-10) : []
+    frozen: Array.isArray(gl.frozen) ? gl.frozen.filter(isDay).slice(-10) : [],
+    last: num(gl.last) // time (ms) of the last round that gave points
   };
 }
 
@@ -184,4 +186,29 @@ export function migrateLedger(oldLedger, gameStats, now = new Date()) {
     gl.anchor = last;
   }
   return gl;
+}
+
+/**
+ * The easiest games (colours, animals, numbers) are for the first textbooks: English World 1 and Project 1.
+ * Older groups may play each of them once a week: otherwise they collect points on games far below their level.
+ * `weeks` = student.easyGameWeeks ({ gameKey: week key of the round played }), kept by the server.
+ */
+export const EASY_GAMES = Object.freeze(['colors', 'animals', 'numbers']);
+
+// 'Project 1' but not 'Project 10'
+export const isFirstTextbook = (textbook) => /english\s*world\s*1\b|project\s*1\b/i.test(String(textbook || ''));
+
+/** { allowed, weeks } — `weeks` is what to store when the round is played */
+export function easyGameCheck(weeks, gameKey, textbook, now = new Date()) {
+  const current = weeks && typeof weeks === 'object' && !Array.isArray(weeks) ? weeks : {};
+  if (!EASY_GAMES.includes(gameKey) || isFirstTextbook(textbook)) return { allowed: true, limited: false, weeks: current };
+  const week = weekKeyOfDay(schoolDay(now));
+  if (current[gameKey] === week) return { allowed: false, limited: true, weeks: current };
+  return { allowed: true, limited: true, weeks: { ...current, [gameKey]: week } };
+}
+
+/** A round that gives points within MIN_ROUND_GAP_SEC of the previous one: a repeat, not a new game */
+export function roundTooSoon(raw, playedAtMs) {
+  const last = num(raw && raw.last);
+  return last > 0 && Math.abs(playedAtMs - last) < GAME_RULES.MIN_ROUND_GAP_SEC * 1000;
 }

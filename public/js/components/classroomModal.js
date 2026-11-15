@@ -226,10 +226,10 @@ export function openClassroomModal(groupId, onRefresh = null) {
 
               return `
                 <div class="classroom-student-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-radius:var(--radius-lg); ${rowStyle} gap:12px; flex-wrap:wrap; transition:all 0.15s ease;">
-                  <!-- Left: Rank & Avatar & Details -->
-                  <div style="display:flex; align-items:center; gap:12px; min-width:220px; flex:1;">
+                  <!-- Left: Rank & Avatar & Details (opens the student card) -->
+                  <div class="cls-open-profile" data-sid="${st.id}" role="button" tabindex="0" title="Открыть карточку ученика: история баллов, покупки, посещаемость" style="display:flex; align-items:center; gap:12px; min-width:220px; flex:1;">
                     ${rankBadge}
-                    ${renderStudentAvatarHtml(st, { size: 'md' })}
+                    ${renderStudentAvatarHtml(st, { size: 'md', zoom: false })}
                     <div>
                       <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                         <span style="font-weight:700; font-size:var(--font-size-sm); color:var(--color-text-main);">
@@ -304,8 +304,8 @@ export function openClassroomModal(groupId, onRefresh = null) {
                 const p = item.progress;
                 return `
                   <div style="background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:12px 14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                      ${renderStudentAvatarHtml(st, { size: 'sm' })}
+                    <div class="cls-open-profile" data-sid="${st.id}" role="button" tabindex="0" title="Открыть карточку ученика" style="display:flex; align-items:center; gap:10px;">
+                      ${renderStudentAvatarHtml(st, { size: 'sm', zoom: false })}
                       <div>
                         <div style="font-weight:700; font-size:var(--font-size-sm); color:var(--color-text-main);">${st.fullName}</div>
                         <div class="text-xs text-muted">${formatGrade(st.grade) || ''} • Уровень: ${st.level || freshGroup.level}</div>
@@ -857,6 +857,18 @@ export function openClassroomModal(groupId, onRefresh = null) {
     // Batch group award
     container.querySelector('#btn-cls-batch-award')?.addEventListener('click', () => {
       openBatchGroupScoring();
+    });
+
+    // Student name / avatar: the student card (points history, purchases, attendance), with a way back here
+    container.querySelectorAll('.cls-open-profile').forEach(el => {
+      const open = async (e) => {
+        if (e.target.closest('a')) return; // the phone link keeps working
+        const sid = el.getAttribute('data-sid');
+        const { StudentsView } = await import('../views/studentsView.js');
+        StudentsView.openProfileModal(sid, { onBack: () => openClassroomModal(groupId, onRefresh), backLabel: '← К кабинету класса' });
+      };
+      el.addEventListener('click', open);
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); } });
     });
 
     // Single student award button

@@ -119,13 +119,16 @@ export const StudentsView = {
   },
 
   renderStudentCard(student, canManage = false) {
-    const levelClass = 'level-' + student.level.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    // A card without a level (added by hand, not from the import) must not break the whole list
+    const levelClass = 'level-' + String(student.level || '').toLowerCase().replace(/[^a-z0-9]/g, '-');
     const shiftClass = student.shift === 'Первая' ? 'badge-shift-1' : 'badge-shift-2';
     const group = store.getGroupById(student.groupId);
     const currMonth = store.getCurrentAcademicMonth();
     const payment = store.getPayment(student.id, currMonth.key);
     const isPaid = payment && payment.status === 'paid';
-    const attStats = store.getStudentAttendanceStats(student.id);
+    // This month, like the attendance journal; the whole year is in the tooltip
+    const attStats = store.getStudentAttendanceStats(student.id, { monthKey: currMonth.key });
+    const attAll = store.getStudentAttendanceStats(student.id);
 
     return `
       <div class="student-card" data-student-id="${student.id}">
@@ -157,16 +160,16 @@ export const StudentsView = {
             </div>
             <div class="detail-row">
               <span class="detail-label">Уровень:</span>
-              <span class="badge badge-level ${levelClass}">${student.level}</span>
+              <span class="badge badge-level ${levelClass}">${student.level || "—"}</span>
             </div>
             <div class="detail-row">
               <span class="detail-label">Смена:</span>
               <span class="badge ${shiftClass}">${student.shift} смена</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Посещаемость:</span>
-              <span class="detail-val" style="font-weight:700; color:${attStats.percentage >= 80 ? 'var(--color-success)' : 'var(--color-warning-text)'};">
-                ${attStats.percentage}% (${attStats.attended}/${attStats.total})
+              <span class="detail-label">Посещаемость (${currMonth.shortName.toLowerCase()}):</span>
+              <span class="detail-val" style="font-weight:700; color:${attStats.percentage >= 80 ? 'var(--color-success)' : 'var(--color-warning-text)'};" title="За всё время: ${attAll.percentage}% (${attAll.attended} из ${attAll.total})">
+                ${attStats.total ? `${attStats.percentage}% (${attStats.attended}/${attStats.total})` : 'нет отметок'}
               </span>
             </div>
             <div class="detail-row">
@@ -533,7 +536,8 @@ export const StudentsView = {
     });
   },
 
-  openProfileModal(studentId) {
+  /** Student card; onBack — a "back" button (e.g. to the classroom window it was opened from) */
+  openProfileModal(studentId, { onBack = null, backLabel = '← Назад' } = {}) {
     const student = store.getStudentById(studentId);
     if (!student) return;
 
@@ -546,7 +550,8 @@ export const StudentsView = {
     const currentMonth = store.getCurrentAcademicMonth();
     const monthlyLeaderboard = store.getGroupMonthlyLeaderboard(student.groupId, currentMonth.year, currentMonth.monthIndex);
     const myRankObj = monthlyLeaderboard.find(l => l.studentId === student.id);
-    const profileAttStats = store.getStudentAttendanceStats(studentId);
+    const profileAttStats = store.getStudentAttendanceStats(studentId, { monthKey: currentMonth.key });
+    const profileAttAll = store.getStudentAttendanceStats(studentId);
     const profilePayment = store.getPayment(studentId, currentMonth.key);
     const profileIsPaid = profilePayment && profilePayment.status === 'paid';
 
@@ -576,7 +581,7 @@ export const StudentsView = {
               <div style="font-size:0.75rem; color:var(--color-text-secondary); font-weight:600;">
                 Заработанно за всё время: <strong style="color:var(--color-text-main);">${student.lifetimePoints != null ? student.lifetimePoints : (student.totalPoints || 0)} ⭐</strong>
               </div>
-              <span class="badge badge-level level-${student.level.toLowerCase()}">${student.level}</span>
+              <span class="badge badge-level level-${String(student.level || "").toLowerCase()}">${student.level || "—"}</span>
             </div>
           </div>
 
@@ -589,8 +594,9 @@ export const StudentsView = {
               </span>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); font-size:var(--font-size-sm);">
-              <div><strong>Посещаемость:</strong> <span style="font-weight:700; color:${profileAttStats.percentage >= 80 ? '#16a34a' : '#ea580c'};">${profileAttStats.percentage}%</span> (${profileAttStats.attended} из ${profileAttStats.total} уроков)</div>
-              <div><strong>Пропусков:</strong> <span style="font-weight:700; color:${profileAttStats.missed > 0 ? '#dc2626' : 'inherit'};">${profileAttStats.missed}</span></div>
+              <div><strong>Посещаемость за ${currentMonth.shortName.toLowerCase()}:</strong> ${profileAttStats.total ? `<span style="font-weight:700; color:${profileAttStats.percentage >= 80 ? '#16a34a' : '#ea580c'};">${profileAttStats.percentage}%</span> (${profileAttStats.attended} из ${profileAttStats.total} уроков)` : 'нет отметок'}</div>
+              <div><strong>Пропусков за ${currentMonth.shortName.toLowerCase()}:</strong> <span style="font-weight:700; color:${profileAttStats.missed > 0 ? '#dc2626' : 'inherit'};">${profileAttStats.missed}</span></div>
+              <div class="text-xs text-muted" style="grid-column: 1 / -1;">За всё время: ${profileAttAll.percentage}% (${profileAttAll.attended} из ${profileAttAll.total}), пропусков ${profileAttAll.missed}</div>
             </div>
           </div>
 
@@ -615,7 +621,7 @@ export const StudentsView = {
           <div class="card" style="padding:var(--space-4); background:linear-gradient(180deg, #f8faff 0%, #ffffff 100%); border:1px solid #e0e7ff;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-2);">
               <h4 style="margin:0; font-size:var(--font-size-sm); color:var(--color-primary); display:flex; align-items:center; gap:6px;">
-                🏆 Результат в группе за Сентябрь 2026
+                🏆 Результат в группе за ${currentMonth.name}
               </h4>
               ${myRankObj ? `
                 <span class="badge ${myRankObj.rank === 1 ? 'badge-completed' : myRankObj.rank === 2 ? 'badge-planned' : 'badge'}" style="${myRankObj.rank === 1 ? 'background:#ca8a04; color:#fff;' : ''}">
@@ -725,10 +731,14 @@ export const StudentsView = {
               🗑️ Удалить ученика
             </button>
           ` : '<div></div>'}
-          <button type="button" class="btn btn-secondary" onclick="document.getElementById('main-modal').close()">Закрыть</button>
+          <div style="display:flex; gap:8px;">
+            ${onBack ? `<button type="button" class="btn btn-primary" id="btn-profile-back">${backLabel}</button>` : ''}
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('main-modal').close()">Закрыть</button>
+          </div>
         </div>
       `,
       onOpen: () => {
+        document.getElementById('btn-profile-back')?.addEventListener('click', () => onBack());
         document.querySelector('.btn-modal-delete-student')?.addEventListener('click', (e) => {
           const id = e.currentTarget.getAttribute('data-id');
           if (confirm(`Удалить ученика "${student.fullName}" из базы школы?`)) {

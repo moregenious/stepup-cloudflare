@@ -121,7 +121,8 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   // Mini-games: the server applies the weekly limit (100 at the start, +10 for the first streak day) and keeps the streak
   const games = [];
   for (let i = 0; i < 12; i++) {
-    games.push({ c: 'pointRecords', id: `pt-game-${i}`, t: 'put', v: { studentId: 'stu-1', points: 10, gameScore: 10, gameTitle: 'Тест', category: 'Мини-игры' } });
+    // Rounds played a minute apart (rounds less than 8 s apart are one round sent twice)
+    games.push({ c: 'pointRecords', id: `pt-game-${i}`, t: 'put', v: { studentId: 'stu-1', points: 10, gameScore: 10, gameTitle: 'Тест', category: 'Мини-игры', date: new Date(Date.now() - (13 - i) * 60000).toISOString() } });
   }
   const g = await call('/api/push', { cookie: student.cookie, body: { ops: games } });
   assert.ok(g.json.results.every(r => r.ok), JSON.stringify(g.json.results));
@@ -147,6 +148,56 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   ] } });
   assert.equal(buy.json.results[0].ok, true, JSON.stringify(buy.json));
 
+  // Attack: a streak freeze with a negative itemPrice must cost 150, not add points
+  const balanceOf = async () => rowsOf(await call('/api/state', { body: { known: {} }, cookie: student.cookie }), 'students').find(s => s.id === 'stu-1').totalPoints;
+  const beforeFreeze = await balanceOf();
+  await call('/api/push', { cookie: student.cookie, body: { ops: [
+    { c: 'purchases', id: 'pur-freeze-hack', t: 'put', v: { studentId: 'stu-1', type: 'streak_freeze', price: 150, itemPrice: -100000 } }
+  ] } });
+  assert.equal(await balanceOf(), beforeFreeze - 150, 'the freeze costs its price whatever itemPrice says');
+
+  // Attack: the student changes their birth date to collect another birthday present
+  const birthBefore = rowsOf(await call('/api/state', { body: { known: {} }, cookie: student.cookie }), 'students').find(s => s.id === 'stu-1').birthDate;
+  await call('/api/push', { cookie: student.cookie, body: { ops: [{ c: 'students', id: 'stu-1', t: 'patch', set: [[['birthDate'], '2015-01-01']], unset: [] }] } });
+  assert.equal(rowsOf(await call('/api/state', { body: { known: {} }, cookie: student.cookie }), 'students').find(s => s.id === 'stu-1').birthDate, birthBefore, 'a birth date on the card stays');
+
+  // Looks (frames, emoji avatars, titles): only what was bought or earned
+  const meNow = async () => rowsOf(await call('/api/state', { body: { known: {} }, cookie: student.cookie }), 'students').find(s => s.id === 'stu-1');
+  const patchMe = (set) => call('/api/push', { cookie: student.cookie, body: { ops: [{ c: 'students', id: 'stu-1', t: 'patch', set, unset: [] }] } });
+  await patchMe([[['unlockedFrames'], ['frame-none', 'frame-gold']], [['avatarFrame'], 'frame-gold'], [['unlockedTitles'], ['Король домашки']], [['studentTitle'], '👑 Король домашки']]);
+  let looks = await meNow();
+  assert.deepEqual(looks.unlockedFrames, ['frame-none'], 'a frame without a purchase is not added');
+  assert.notEqual(looks.avatarFrame, 'frame-gold', 'nor worn');
+  assert.deepEqual(looks.unlockedTitles, [], 'a shop title without a purchase is not added');
+  assert.notEqual(looks.studentTitle, '👑 Король домашки');
+  const cheap = await call('/api/push', { cookie: student.cookie, body: { ops: [
+    { c: 'purchases', id: 'pur-frame-cheap', t: 'put', v: { studentId: 'stu-1', type: 'frame', itemId: 'frame-gold', itemName: 'Королевская корона', price: 1, status: 'completed' } }
+  ] } });
+  assert.equal(cheap.json.results[0].ok, false, 'a frame for 1 ⭐ is refused');
+  const unknownTitle = await call('/api/push', { cookie: student.cookie, body: { ops: [
+    { c: 'purchases', id: 'pur-title-x', t: 'put', v: { studentId: 'stu-1', type: 'title', itemId: 'Директор школы', price: 150, status: 'completed' } }
+  ] } });
+  assert.equal(unknownTitle.json.results[0].ok, false, 'a title the shop does not sell is refused');
+  // Not enough points: the purchase is refused and the frame added with it is taken back
+  await call('/api/push', { cookie: student.cookie, body: { ops: [
+    { c: 'students', id: 'stu-1', t: 'patch', set: [[['unlockedFrames'], ['frame-none', 'frame-gold']]], unset: [] },
+    { c: 'purchases', id: 'pur-frame-poor', t: 'put', v: { studentId: 'stu-1', type: 'frame', itemId: 'frame-gold', itemName: 'Королевская корона', price: 100, status: 'completed' } }
+  ] } }).catch(() => null);
+  if ((await balanceOf()) < 100) assert.deepEqual((await meNow()).unlockedFrames, ['frame-none'], 'unpaid frame taken back');
+  await call('/api/push', { cookie: admin.cookie, body: { ops: [{ c: 'pointRecords', id: 'pt-gift-for-shop', t: 'put', v: { studentId: 'stu-1', points: 300, category: 'Активность', date: new Date().toISOString() } }] } });
+  // An honest purchase: the frame is paid for in the same request, so it is kept and worn
+  const balanceBeforeFrame = await balanceOf();
+  await call('/api/push', { cookie: student.cookie, body: { ops: [
+    { c: 'students', id: 'stu-1', t: 'patch', set: [[['unlockedFrames'], ['frame-none', 'frame-gold']], [['avatarFrame'], 'frame-gold']], unset: [] },
+    { c: 'purchases', id: 'pur-frame-ok', t: 'put', v: { studentId: 'stu-1', type: 'frame', itemId: 'frame-gold', itemName: 'Королевская корона', price: 100, status: 'completed' } }
+  ] } });
+  looks = await meNow();
+  assert.deepEqual([looks.unlockedFrames, looks.avatarFrame, looks.totalPoints], [['frame-none', 'frame-gold'], 'frame-gold', balanceBeforeFrame - 100]);
+  // Secret titles are earned in the games (the browser adds them)
+  await patchMe([[['unlockedTitles'], ['Словарный ниндзя']], [['studentTitle'], '🥷 Словарный ниндзя']]);
+  looks = await meNow();
+  assert.deepEqual([looks.unlockedTitles, looks.studentTitle], [['Словарный ниндзя'], '🥷 Словарный ниндзя']);
+
   // Birthday present: 200 points once a year, within two weeks after the birthday; the year of birth is ignored
   const bdayRec = (id, points) => ({ c: 'pointRecords', id, t: 'put', v: { studentId: 'stu-1', points, category: 'День рождения', comment: 'ДР' } });
   const fiveDaysAgo = new Date(Date.now() - 5 * 86400000);
@@ -162,6 +213,15 @@ test('Cloudflare Worker API (D1 + R2)', async () => {
   await call('/api/push', { cookie: admin.cookie, body: { ops: [{ c: 'students', id: 'stu-1', t: 'patch', set: [[['birthDate'], `2015-${String(longAgo.getUTCMonth() + 1).padStart(2, '0')}-${String(longAgo.getUTCDate()).padStart(2, '0')}`], [['lastBirthdayBonusYear'], 0]], unset: [] }] } });
   await call('/api/push', { cookie: student.cookie, body: { ops: [bdayRec('pt-bday-3', 200)] } });
   assert.equal(rowsOf(await call('/api/state', { body: { known: {} }, cookie: student.cookie }), 'pointRecords').some(r => r.id === 'pt-bday-3'), false, 'not 40 days after the birthday');
+
+  // Colours / animals: the server marks the week for groups past English World 1, not for English World 1
+  const easyGame = (id, gameKey) => ({ c: 'pointRecords', id, t: 'put', v: { studentId: 'stu-1', points: 5, gameScore: 5, gameKey, gameTitle: 'Цвета', category: 'Мини-игры' } });
+  const easyWeeks = async () => rowsOf(await call('/api/state', { body: { known: {} }, cookie: student.cookie }), 'students').find(s => s.id === 'stu-1').easyGameWeeks || {};
+  await call('/api/push', { cookie: student.cookie, body: { ops: [easyGame('pt-easy-1', 'colors')] } });
+  assert.match(String((await easyWeeks()).colors), /^\d{4}-W\d{2}$/, 'Book A: the round of this week is remembered');
+  await call('/api/push', { cookie: admin.cookie, body: { ops: [{ c: 'groups', id: 'grp-a', t: 'patch', set: [[['textbook'], 'English World 1']], unset: [] }] } });
+  await call('/api/push', { cookie: student.cookie, body: { ops: [easyGame('pt-easy-2', 'animals')] } });
+  assert.equal((await easyWeeks()).animals, undefined, 'English World 1: no weekly limit');
 
   // Present from staff browsers: only the first is accepted, a deleted present does not come back, hand-made gifts stay free
   const twoDaysAgo = new Date(Date.now() - 2 * 86400000);

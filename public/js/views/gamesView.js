@@ -28,12 +28,16 @@ import { PHRASAL_VERBS_DATA } from '../data/phrasalVerbsData.js';
 import { FIND_MISTAKE_DATA } from '../data/findMistakeData.js';
 import { SYNONYMS_ANTONYMS_DATA } from '../data/synonymsAntonymsData.js';
 import { COLORS_DATA, ANIMALS_DATA } from '../data/pictureGamesData.js';
+import { NUMBER_LEVELS, buildNumbersRound } from '../data/numbersData.js';
+import { SECRET_TITLE_NAMES } from '../store.js';
+import { mountPaymentReminder, paymentReminderLine } from '../components/paymentReminder.js';
 
 /** Games on the choice page (key = GamesView.activeTab, streakKey = field of the game progress) */
 // Easy games first (the youngest find them at once), sentence building and conditionals last
 const GAMES = [
   { key: 'colors', icon: '🎨', name: 'Цвета', desc: 'Узнай цвет по-английски', streakKey: 'colorsStreak', easy: true },
   { key: 'animals', icon: '🦁', name: 'Животные', desc: 'Найди животное по картинке', streakKey: 'animalsStreak', easy: true },
+  { key: 'numbers', icon: '🔢', name: 'Числа', desc: 'Числа словами: от 1 до миллиона и дроби', streakKey: 'numbersStreak', easy: true },
   { key: 'words', icon: '🔤', name: 'Слова', desc: 'Новые слова с урока и повторение старых', streakKey: 'wordsStreak', easy: true },
   { key: 'irregular', icon: '⚡', name: 'Глаголы V1–V3', desc: 'Неправильные глаголы: три формы', streakKey: 'irregularStreak' },
   { key: 'synonyms', icon: '⚡', name: 'Синонимы и антонимы', desc: 'Блиц на время: 15 секунд на ответ', streakKey: 'synonymsStreak' },
@@ -65,6 +69,12 @@ export const GamesView = {
   phrasalState: null,
   mistakesState: null,
   synonymsState: null,
+  numbersState: null,
+
+  /** Result window of a round, with the payment reminder line at the bottom when payment is due */
+  openResult(opts) {
+    modal.open({ ...opts, bodyHtml: (opts.bodyHtml || '') + paymentReminderLine() });
+  },
 
   // Helper to get active student ID
   getActiveStudentId() {
@@ -190,13 +200,14 @@ export const GamesView = {
               <span style="background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 6px;" title="Фразовые глаголы">🚀 ${progress.phrasalStreak || 0}/3</span>
               <span style="background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 6px;" title="Найди ошибку">🕵️ ${progress.mistakesStreak || 0}/3</span>
               <span style="background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 6px;" title="Синонимы и Антонимы">⚡ ${progress.synonymsStreak || 0}/3</span>
+              <span style="background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 6px;" title="Числа">🔢 ${progress.numbersStreak || 0}/3</span>
             </div>
 
             <!-- Unlocked Secret Titles Chips -->
             <div style="margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
               <span style="font-size: 0.72rem; color: #fef08a; font-weight: 700;">🏆 Секретные титулы:</span>
               ${progress.unlockedSecretTitles.length === 0 ? `
-                <span style="font-size: 0.72rem; color: rgba(255,255,255,0.6); font-style: italic;">Пока не открыты (0 из 12)</span>
+                <span style="font-size: 0.72rem; color: rgba(255,255,255,0.6); font-style: italic;">Пока не открыты (0 из ${SECRET_TITLE_NAMES.length})</span>
               ` : progress.unlockedSecretTitles.map(t => `
                 <span style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
                   👑 ${t}
@@ -210,28 +221,39 @@ export const GamesView = {
         <!-- Game choice: one card per game -->
         <h3 class="games-choice-title">Выбери игру</h3>
         <div class="games-choice-grid">
-          ${GAMES.map(g => `
-            <button type="button" class="games-choice-card tab-game-btn" data-game="${g.key}">
-              <span class="games-choice-icon">${g.icon}</span>
+          ${GAMES.map(g => {
+            // Colours / animals: once a week for groups past English World 1
+            const easy = isStudent && studentId ? store.easyGameStatus(studentId, g.key) : { limited: false, locked: false };
+            return `
+            <button type="button" class="games-choice-card tab-game-btn ${easy.locked ? 'is-locked' : ''}" data-game="${g.key}" data-locked="${easy.locked ? '1' : ''}">
+              <span class="games-choice-icon">${easy.locked ? '🔒' : g.icon}</span>
               <span class="games-choice-text">
                 <span class="games-choice-name">${g.name}${g.easy ? ' <span class="games-choice-easy">легко</span>' : ''}</span>
-                <span class="games-choice-desc">${g.desc}</span>
+                <span class="games-choice-desc">${easy.locked ? 'Уже сыграно на этой неделе. Снова — с понедельника' : easy.limited ? `${g.desc} · 1 раз в неделю` : g.desc}</span>
               </span>
               ${isStudent ? `<span class="games-choice-streak" title="Побед 10/10 подряд для секретного титула">🔥 ${progress[g.streakKey] || 0}/3</span>` : ''}
             </button>
-          `).join('')}
+          `;
+          }).join('')}
         </div>
       </div>
     `;
 
+    // The choice page is drawn again by the in-game "back" button too: keep the payment reminder on it
+    mountPaymentReminder(container);
     this.bindTabEvents(container, studentId);
   },
 
   bindTabEvents(container, studentId) {
     container.querySelectorAll('.tab-game-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (btn.dataset.locked) {
+          toast.info('Эта игра для твоей группы — 1 раз в неделю. Снова можно будет сыграть с понедельника!');
+          return;
+        }
         this.activeTab = btn.dataset.game;
         trackGameOpen(this.activeTab);
+        if (this.activeTab === 'numbers') this.numbersState = null;
         // Reset sub-state for freshly selected game
         if (this.activeTab === 'words') this.wordsState = null;
         if (this.activeTab === 'irregular') this.irregularState = null;
@@ -258,6 +280,8 @@ export const GamesView = {
 
     if (this.activeTab === 'colors' || this.activeTab === 'animals') {
       this.renderPictureGame(mount, studentId, this.activeTab);
+    } else if (this.activeTab === 'numbers') {
+      this.renderNumbersGame(mount, studentId);
     } else if (this.activeTab === 'words') {
       this.renderWordsGame(mount, studentId);
     } else if (this.activeTab === 'irregular') {
@@ -547,6 +571,9 @@ export const GamesView = {
 
   finishWordsGame(mount, studentId) {
     const state = this.wordsState;
+    // Counted once: the finish button stays on the page when the result window is closed with ✕,
+    // and a second click must not award the round again. It starts a new round instead.
+    if (state.isFinished) { this.renderWordsGame(mount, studentId); return; }
     state.isFinished = true;
 
     const isStudent = auth.isStudent();
@@ -606,7 +633,7 @@ export const GamesView = {
       </button>
     `;
 
-    modal.open({
+    this.openResult({
       title: modalTitle,
       bodyHtml,
       footerHtml,
@@ -640,10 +667,11 @@ export const GamesView = {
 
   pictureHtml(kind, item, size) {
     if (kind === 'colors') {
-      // The colour goes through a custom property: the dark theme repaints inline light backgrounds
-      // (style="background:#ffffff"), which turned the white swatch dark
-      const border = item.word === 'white' ? 'border: 2px solid #cbd5e1;' : '';
-      return `<span class="picture-swatch" style="width:${size}px; height:${size}px; --swatch:${item.color}; ${border}"></span>`;
+      // A picture, not a CSS colour: the dark mode of some phone browsers (Samsung Internet) inverts page colours
+      // but leaves pictures alone, so a yellow circle drawn with CSS turned blue there
+      const stroke = item.word === 'white' ? ' stroke="#cbd5e1" stroke-width="4"' : '';
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="${item.color}"${stroke}/></svg>`;
+      return `<img class="picture-swatch" src="data:image/svg+xml,${encodeURIComponent(svg)}" width="${size}" height="${size}" alt="" draggable="false">`;
     }
     return `<span class="picture-emoji" style="font-size:${Math.round(size * 0.8)}px;">${item.emoji}</span>`;
   },
@@ -666,6 +694,7 @@ export const GamesView = {
         <div class="picture-question">
           ${q.mode === 'see' ? this.pictureHtml(kind, q.item, 120) : `<div class="picture-word">${q.item.word}</div>`}
           <div class="picture-prompt">${prompt}</div>
+          ${kind === 'colors' && /SamsungBrowser/i.test(navigator.userAgent) ? `<div class="picture-hint">Если цвета выглядят странно, выключите «Тёмный режим» в меню браузера Samsung Internet (☰ → Тёмный режим).</div>` : ''}
         </div>
         <div class="picture-options ${q.mode === 'find' ? 'is-pictures' : ''}">
           ${q.options.map(o => `
@@ -706,32 +735,254 @@ export const GamesView = {
 
   finishPictureGame(mount, studentId, kind) {
     const state = this.pictureState;
+    // Counted once: the finish button stays on the page when the result window is closed with ✕,
+    // and a second click must not award the round again. It starts a new round instead.
+    if (state.isFinished) { this.renderPictureGame(mount, studentId, kind); return; }
     state.isFinished = true;
     const title = kind === 'colors' ? 'Цвета' : 'Животные';
     const isStudent = auth.isStudent();
     const award = isStudent && studentId ? store.awardGamePoints(studentId, state.score, kind, title) : null;
-    const result = isStudent && studentId ? store.recordGameResult(studentId, kind, state.score, 10) : { currentStreak: 0 };
+    // A round over the weekly limit of an older group counts for nothing (no points, no streak)
+    const weekLocked = Boolean(award?.weekLocked);
+    const result = isStudent && studentId && !weekLocked ? store.recordGameResult(studentId, kind, state.score, 10) : { currentStreak: 0 };
+    const lockedNow = isStudent && studentId && store.easyGameStatus(studentId, kind).locked;
 
-    modal.open({
+    this.openResult({
       title: state.score === 10 ? '🎯 10 из 10! Отлично!' : 'Раунд завершён!',
       bodyHtml: `
         <div style="text-align:center; padding: var(--space-4);">
           <div style="font-size: 2.5rem;">${state.score === 10 ? '🎉' : kind === 'colors' ? '🎨' : '🦁'}</div>
           <h3 style="font-size:1.3rem; color: var(--color-primary); margin: 6px 0;">Твой результат: ${state.score} из 10</h3>
-          ${award ? `
+          ${award && !weekLocked ? `
             <div style="background: var(--color-bg-app); padding: var(--space-3); border-radius: var(--radius-lg); border:1px solid var(--color-border); max-width:320px; margin: var(--space-3) auto;">
               <div style="font-size:1.5rem; font-weight:800; color:#f59e0b;">+${award.pointsAwarded} ⭐</div>
               <div style="font-size: var(--font-size-xs); color: var(--color-text-muted);">Лимит недели: ${award.weeklyTotal} / ${award.weeklyLimit || 100} ⭐</div>
             </div>
             <div style="font-size: var(--font-size-sm); color:#0284c7; font-weight:700;">Серия побед 10/10 подряд: ${result.currentStreak || 0} из 3</div>
           ` : ''}
+          ${result.newTitleUnlocked ? `<div class="games-new-title">🏆 Новый секретный титул: «${result.newTitleUnlocked}»!</div>` : ''}
+          ${lockedNow ? `<div style="font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: 8px;">${weekLocked ? 'Баллы за эту игру уже получены на этой неделе.' : ''} Для твоей группы эта игра — 1 раз в неделю. Снова — с понедельника!</div>` : ''}
         </div>`,
-      footerHtml: `<button type="button" class="btn btn-primary" id="btn-picture-again" style="width:100%;">🔄 Играть ещё раз</button>`,
+      footerHtml: lockedNow
+        ? `<button type="button" class="btn btn-primary" id="btn-picture-back" style="width:100%;">← К другим играм</button>`
+        : `<button type="button" class="btn btn-primary" id="btn-picture-again" style="width:100%;">🔄 Играть ещё раз</button>`,
       onOpen: () => {
         document.getElementById('btn-picture-again')?.addEventListener('click', () => {
           modal.close();
           this.initPictureRound(kind);
           this.renderPictureGame(mount, studentId, kind);
+        });
+        document.getElementById('btn-picture-back')?.addEventListener('click', () => {
+          modal.close();
+          this.activeTab = null;
+          const container = mount.closest('.games-view-container')?.parentElement;
+          if (container) this.render(container);
+          window.scrollTo(0, 0);
+        });
+      }
+    });
+  },
+
+  // =========================================================================
+  // GAME: Numbers (levels like the tenses game; a round = 5 "pick 1 of 4" questions + matching 5 pairs)
+  // =========================================================================
+
+  renderNumbersGame(mount, studentId) {
+    const state = this.numbersState;
+    if (!state || state.isFinished) return this.renderNumbersLevels(mount, studentId);
+    if (state.stage === 'choice') return this.renderNumbersChoice(mount, studentId);
+    return this.renderNumbersMatch(mount, studentId);
+  },
+
+  renderNumbersLevels(mount, studentId) {
+    const isStudent = auth.isStudent();
+    const unlocked = isStudent && studentId ? store.getStudentGameProgress(studentId).unlockedNumberLevels : NUMBER_LEVELS.map(l => l.id);
+    mount.innerHTML = `
+      <div class="card game-play-card num-game">
+        <div class="num-levels-head">
+          <div class="num-levels-icon">🔢</div>
+          <h3>Числа по-английски</h3>
+          <p>Выбери число, найди его запись словами и собери пары. Чтобы открыть следующий уровень, набери <strong>8 из 10</strong>!</p>
+        </div>
+        <div class="num-levels">
+          ${NUMBER_LEVELS.map(l => {
+            const open = unlocked.includes(l.id);
+            return `
+              <div class="num-level ${open ? '' : 'is-closed'}">
+                <span class="num-level-icon">${open ? l.icon : '🔒'}</span>
+                <span class="num-level-text"><b>${l.name}</b><span>${l.desc}</span></span>
+                <button type="button" class="btn btn-primary btn-sm btn-num-level" data-level="${l.id}" ${open ? '' : 'disabled'}>${open ? '▶ Играть' : 'Закрыто'}</button>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    mount.querySelectorAll('.btn-num-level').forEach(btn => btn.addEventListener('click', () => {
+      const level = btn.dataset.level;
+      this.numbersState = { level, ...buildNumbersRound(level), index: 0, score: 0, stage: 'choice', matched: new Set(), missed: new Set(), isFinished: false };
+      this.renderNumbersGame(mount, studentId);
+    }));
+  },
+
+  numbersHeader(state, label) {
+    const level = NUMBER_LEVELS.find(l => l.id === state.level);
+    return `
+      <div class="num-head">
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-num-levels">⬅ К уровням</button>
+        <span class="num-head-level">${level.icon} ${level.name.split(' ')[0]}</span>
+        <span class="num-head-score">${label} • Счёт: ${state.score}</span>
+      </div>`;
+  },
+
+  bindNumbersBack(mount, studentId) {
+    mount.querySelector('#btn-num-levels')?.addEventListener('click', () => {
+      this.numbersState = null;
+      this.renderNumbersGame(mount, studentId);
+    });
+  },
+
+  renderNumbersChoice(mount, studentId) {
+    const state = this.numbersState;
+    const q = state.questions[state.index];
+    mount.innerHTML = `
+      <div class="card game-play-card num-game">
+        ${this.numbersHeader(state, `Вопрос ${state.index + 1} из 5`)}
+        <div class="num-question">
+          <div class="num-prompt">${q.mode === 'see' ? 'Как это число пишется словами?' : 'Найди это число:'}</div>
+          <div class="${q.mode === 'see' ? 'num-big' : 'num-words-big'}">${q.mode === 'see' ? q.item.html : q.item.words}</div>
+        </div>
+        <div class="num-options ${q.mode === 'see' ? 'is-words' : 'is-numbers'}">
+          ${q.options.map(o => `
+            <button type="button" class="num-option" data-key="${o.key}">${q.mode === 'see' ? o.words : `<span class="num-option-number">${o.html}</span>`}</button>
+          `).join('')}
+        </div>
+        <div class="picture-feedback" id="num-feedback"></div>
+        <button type="button" class="btn btn-primary" id="btn-num-next" style="display:none; width:100%; margin-top: var(--space-3);">
+          ${state.index === 4 ? 'Дальше: собери пары ➔' : 'Дальше ➔'}
+        </button>
+      </div>`;
+    this.bindNumbersBack(mount, studentId);
+    mount.querySelectorAll('.num-option').forEach(btn => btn.addEventListener('click', () => {
+      if (q.answer) return;
+      q.answer = btn.dataset.key;
+      const correct = q.answer === q.item.key;
+      if (correct) state.score++;
+      btn.classList.add(correct ? 'is-correct' : 'is-wrong');
+      if (!correct) [...mount.querySelectorAll('.num-option')].find(b => b.dataset.key === q.item.key)?.classList.add('is-correct');
+      mount.querySelector('#num-feedback').innerHTML = `${correct ? '✅ Верно!' : '❌ Правильно:'} <strong class="num-inline">${q.item.html}</strong> — ${q.item.words}`;
+      const next = mount.querySelector('#btn-num-next');
+      next.style.display = '';
+      next.addEventListener('click', () => {
+        if (state.index < 4) state.index++;
+        else state.stage = 'match';
+        this.renderNumbersGame(mount, studentId);
+      });
+    }));
+  },
+
+  /** Matching: tap a number, then its words (or the other way round). A pair matched without a mistake = 1 point */
+  renderNumbersMatch(mount, studentId) {
+    const state = this.numbersState;
+    mount.innerHTML = `
+      <div class="card game-play-card num-game">
+        ${this.numbersHeader(state, `Пары: ${state.matched.size} из 5`)}
+        <div class="num-prompt" style="text-align:center;">Соедини число и его запись словами: нажми на число, потом на слова</div>
+        <div class="num-match">
+          <div class="num-match-col">
+            ${state.pairs.map(p => `<button type="button" class="num-tile num-tile-number ${state.matched.has(p.key) ? 'is-matched' : ''}" data-side="n" data-key="${p.key}" ${state.matched.has(p.key) ? 'disabled' : ''}>${p.html}</button>`).join('')}
+          </div>
+          <div class="num-match-col">
+            ${state.words.map(p => `<button type="button" class="num-tile num-tile-words ${state.matched.has(p.key) ? 'is-matched' : ''}" data-side="w" data-key="${p.key}" ${state.matched.has(p.key) ? 'disabled' : ''}>${p.words}</button>`).join('')}
+          </div>
+        </div>
+        <div class="picture-feedback" id="num-feedback"></div>
+      </div>`;
+    this.bindNumbersBack(mount, studentId);
+    let picked = null;
+    mount.querySelectorAll('.num-tile').forEach(tile => tile.addEventListener('click', () => {
+      if (tile.disabled) return;
+      if (!picked || picked.dataset.side === tile.dataset.side) {
+        mount.querySelectorAll('.num-tile.is-picked').forEach(t => t.classList.remove('is-picked'));
+        picked = tile;
+        tile.classList.add('is-picked');
+        return;
+      }
+      const numberTile = picked.dataset.side === 'n' ? picked : tile;
+      const wordsTile = picked.dataset.side === 'w' ? picked : tile;
+      picked.classList.remove('is-picked');
+      picked = null;
+      if (numberTile.dataset.key === wordsTile.dataset.key) {
+        const key = numberTile.dataset.key;
+        state.matched.add(key);
+        if (!state.missed.has(key)) state.score++;
+        if (state.matched.size === state.pairs.length) {
+          this.finishNumbersGame(mount, studentId);
+        } else {
+          this.renderNumbersMatch(mount, studentId);
+        }
+      } else {
+        // The number tapped in a wrong pair loses its point
+        state.missed.add(numberTile.dataset.key);
+        [numberTile, wordsTile].forEach(t => { t.classList.add('is-wrong'); setTimeout(() => t.classList.remove('is-wrong'), 600); });
+        mount.querySelector('#num-feedback').textContent = '❌ Не пара — попробуй ещё раз';
+      }
+    }));
+  },
+
+  finishNumbersGame(mount, studentId) {
+    const state = this.numbersState;
+    // Counted once: the finish button stays on the page when the result window is closed with ✕,
+    // and a second click must not award the round again. It starts a new round instead.
+    if (state.isFinished) { this.renderNumbersGame(mount, studentId); return; }
+    state.isFinished = true;
+    const level = NUMBER_LEVELS.find(l => l.id === state.level);
+    const isStudent = auth.isStudent();
+    const award = isStudent && studentId ? store.awardGamePoints(studentId, state.score, 'numbers', `Числа · ${level.name}`) : null;
+    // Older groups: once a week (like colours and animals); a round over that counts for nothing
+    const weekLocked = Boolean(award?.weekLocked);
+    const result = isStudent && studentId && !weekLocked ? store.recordGameResult(studentId, 'numbers', state.score, 10, { level: state.level }) : { currentStreak: 0 };
+    const lockedNow = isStudent && studentId && store.easyGameStatus(studentId, 'numbers').locked;
+    const nextLevel = result.levelUnlocked ? NUMBER_LEVELS.find(l => l.id === result.levelUnlocked) : null;
+
+    this.openResult({
+      title: state.score === 10 ? '🎯 10 из 10! Отлично!' : 'Раунд завершён!',
+      bodyHtml: `
+        <div style="text-align:center; padding: var(--space-4);">
+          <div style="font-size: 2.5rem;">${state.score === 10 ? '🎉' : '🔢'}</div>
+          <h3 style="font-size:1.3rem; color: var(--color-primary); margin: 6px 0;">Твой результат: ${state.score} из 10</h3>
+          ${award && !weekLocked ? `
+            <div style="background: var(--color-bg-app); padding: var(--space-3); border-radius: var(--radius-lg); border:1px solid var(--color-border); max-width:320px; margin: var(--space-3) auto;">
+              <div style="font-size:1.5rem; font-weight:800; color:#f59e0b;">+${award.pointsAwarded} ⭐</div>
+              <div style="font-size: var(--font-size-xs); color: var(--color-text-muted);">Лимит недели: ${award.weeklyTotal} / ${award.weeklyLimit || 100} ⭐</div>
+            </div>
+            <div style="font-size: var(--font-size-sm); color:#0284c7; font-weight:700;">Серия побед 10/10 подряд: ${result.currentStreak || 0} из 3</div>
+          ` : ''}
+          ${nextLevel ? `<div class="games-new-title">🔓 Открыт уровень ${nextLevel.name}!</div>` : ''}
+          ${result.newTitleUnlocked ? `<div class="games-new-title">🏆 Новый секретный титул: «${result.newTitleUnlocked}»!</div>` : ''}
+          ${lockedNow ? `<div style="font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: 8px;">${weekLocked ? 'Баллы за эту игру уже получены на этой неделе.' : ''} Для твоей группы эта игра — 1 раз в неделю. Снова — с понедельника!</div>` : ''}
+        </div>`,
+      footerHtml: lockedNow
+        ? `<button type="button" class="btn btn-primary" id="btn-num-back-games" style="width:100%;">← К другим играм</button>`
+        : `
+        <button type="button" class="btn btn-secondary" id="btn-num-to-levels" style="flex:1;">К уровням</button>
+        <button type="button" class="btn btn-primary" id="btn-num-again" style="flex:1;">🔄 Ещё раунд</button>`,
+      onOpen: () => {
+        document.getElementById('btn-num-back-games')?.addEventListener('click', () => {
+          modal.close();
+          this.numbersState = null;
+          this.activeTab = null;
+          const container = mount.closest('.games-view-container')?.parentElement;
+          if (container) this.render(container);
+          window.scrollTo(0, 0);
+        });
+        document.getElementById('btn-num-again')?.addEventListener('click', () => {
+          modal.close();
+          this.numbersState = { level: state.level, ...buildNumbersRound(state.level), index: 0, score: 0, stage: 'choice', matched: new Set(), missed: new Set(), isFinished: false };
+          this.renderNumbersGame(mount, studentId);
+        });
+        document.getElementById('btn-num-to-levels')?.addEventListener('click', () => {
+          modal.close();
+          this.numbersState = null;
+          this.renderNumbersGame(mount, studentId);
         });
       }
     });
@@ -916,6 +1167,9 @@ export const GamesView = {
 
   finishIrregularGame(mount, studentId) {
     const state = this.irregularState;
+    // Counted once: the finish button stays on the page when the result window is closed with ✕,
+    // and a second click must not award the round again. It starts a new round instead.
+    if (state.isFinished) { this.renderIrregularGame(mount, studentId); return; }
     state.isFinished = true;
 
     const isStudent = auth.isStudent();
@@ -977,7 +1231,7 @@ export const GamesView = {
       </button>
     `;
 
-    modal.open({
+    this.openResult({
       title: modalTitle,
       bodyHtml,
       footerHtml,
@@ -1176,6 +1430,9 @@ export const GamesView = {
 
   finishConditionalsGame(mount, studentId) {
     const state = this.conditionalsState;
+    // Counted once: the finish button stays on the page when the result window is closed with ✕,
+    // and a second click must not award the round again. It starts a new round instead.
+    if (state.isFinished) { this.renderConditionalsGame(mount, studentId); return; }
     state.isFinished = true;
 
     const isStudent = auth.isStudent();
@@ -1231,7 +1488,7 @@ export const GamesView = {
       </button>
     `;
 
-    modal.open({
+    this.openResult({
       title: state.score === 10 ? '🎉 10 из 10 в Conditionals!' : 'Раунд завершен!',
       bodyHtml,
       footerHtml,
@@ -1496,6 +1753,9 @@ export const GamesView = {
 
   finishTensesGame(mount, studentId) {
     const state = this.tensesState;
+    // Counted once: the finish button stays on the page when the result window is closed with ✕,
+    // and a second click must not award the round again. It starts a new round instead.
+    if (state.isFinished) { this.renderTensesGame(mount, studentId); return; }
     state.isFinished = true;
 
     const isStudent = auth.isStudent();
@@ -1569,7 +1829,7 @@ export const GamesView = {
       </button>
     `;
 
-    modal.open({
+    this.openResult({
       title: 'Результаты раунда',
       bodyHtml,
       footerHtml,
@@ -1808,6 +2068,9 @@ export const GamesView = {
 
   finishBuilderGame(mount, studentId) {
     const state = this.builderState;
+    // Counted once: the finish button stays on the page when the result window is closed with ✕,
+    // and a second click must not award the round again. It starts a new round instead.
+    if (state.isFinished) { this.renderBuilderGame(mount, studentId); return; }
     state.isFinished = true;
 
     const isStudent = auth.isStudent();
@@ -1866,7 +2129,7 @@ export const GamesView = {
       </button>
     `;
 
-    modal.open({
+    this.openResult({
       title: modalTitle,
       bodyHtml,
       footerHtml,
@@ -2070,6 +2333,9 @@ export const GamesView = {
 
   finishPrepositionsGame(mount, studentId) {
     const state = this.prepositionsState;
+    // Counted once: the finish button stays on the page when the result window is closed with ✕,
+    // and a second click must not award the round again. It starts a new round instead.
+    if (state.isFinished) { this.renderPrepositionsGame(mount, studentId); return; }
     state.isFinished = true;
 
     const isStudent = auth.isStudent();
@@ -2128,7 +2394,7 @@ export const GamesView = {
       </button>
     `;
 
-    modal.open({
+    this.openResult({
       title: modalTitle,
       bodyHtml,
       footerHtml,
@@ -2331,6 +2597,9 @@ export const GamesView = {
 
   finishPhrasalGame(mount, studentId) {
     const state = this.phrasalState;
+    // Counted once: the finish button stays on the page when the result window is closed with ✕,
+    // and a second click must not award the round again. It starts a new round instead.
+    if (state.isFinished) { this.renderPhrasalGame(mount, studentId); return; }
     state.isFinished = true;
 
     const isStudent = auth.isStudent();
@@ -2389,7 +2658,7 @@ export const GamesView = {
       </button>
     `;
 
-    modal.open({
+    this.openResult({
       title: modalTitle,
       bodyHtml,
       footerHtml,
@@ -2595,6 +2864,9 @@ export const GamesView = {
 
   finishMistakesGame(mount, studentId) {
     const state = this.mistakesState;
+    // Counted once: the finish button stays on the page when the result window is closed with ✕,
+    // and a second click must not award the round again. It starts a new round instead.
+    if (state.isFinished) { this.renderMistakesGame(mount, studentId); return; }
     state.isFinished = true;
 
     const isStudent = auth.isStudent();
@@ -2653,7 +2925,7 @@ export const GamesView = {
       </button>
     `;
 
-    modal.open({
+    this.openResult({
       title: modalTitle,
       bodyHtml,
       footerHtml,
@@ -2892,6 +3164,9 @@ export const GamesView = {
   finishSynonymsGame(mount, studentId) {
     const state = this.synonymsState;
     if (state.timer) clearInterval(state.timer);
+    // Counted once: the finish button stays on the page when the result window is closed with ✕,
+    // and a second click must not award the round again. It starts a new round instead.
+    if (state.isFinished) { this.renderSynonymsGame(mount, studentId); return; }
     state.isFinished = true;
 
     const isStudent = auth.isStudent();
@@ -2950,7 +3225,7 @@ export const GamesView = {
       </button>
     `;
 
-    modal.open({
+    this.openResult({
       title: modalTitle,
       bodyHtml,
       footerHtml,

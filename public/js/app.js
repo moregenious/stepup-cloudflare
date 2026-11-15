@@ -32,6 +32,7 @@ import { HomeworkView } from './views/homeworkView.js';
 import { IrregularVerbsView } from './views/irregularVerbsView.js';
 import { SurveyView } from './views/surveyView.js';
 import { initTheme } from './theme.js';
+import { mountPaymentReminder, paymentDotHtml } from './components/paymentReminder.js';
 
 export class App {
   constructor() {
@@ -432,6 +433,7 @@ export class App {
         <a href="#student-cabinet" class="nav-item ${this.currentHash === '#student-cabinet' ? 'active' : ''}">
           <span class="nav-item-icon">🎓</span>
           <span>Главный кабинет</span>
+          ${paymentDotHtml()}
         </a>
         <a href="#survey" class="nav-item ${this.currentHash === '#survey' ? 'active' : ''}">
           <span class="nav-item-icon">📋</span>
@@ -543,7 +545,7 @@ export class App {
     } else if (role === auth.ROLE_STUDENT) {
       barHtml = `
         <a href="#student-cabinet" class="mobile-bottom-item ${this.currentHash === '#student-cabinet' ? 'active' : ''}">
-          <span class="bottom-icon">🎓</span>
+          <span class="bottom-icon">🎓${paymentDotHtml()}</span>
           <span>Кабинет</span>
         </a>
         <a href="#homework" class="mobile-bottom-item ${this.currentHash === '#homework' ? 'active' : ''}">
@@ -796,6 +798,9 @@ export class App {
       } else {
         StudentCabinet.render(container);
       }
+      // Payment reminder on every student page except the cabinet (it has its own big banner) and a running game
+      const inCabinet = !['#homework', '#vocabulary', '#irregular-verbs', '#games', '#shop', '#survey'].includes(hash);
+      if (!inCabinet && !(hash === '#games' && GamesView.activeTab)) mountPaymentReminder(container);
     } else if (role === auth.ROLE_TEACHER && (hash === '#teacher-cabinet' || hash === '#dashboard')) {
       // Teacher specific landing
       TeacherCabinet.render(container);

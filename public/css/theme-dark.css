@@ -141,3 +141,24 @@
 :root[data-theme="dark"] .btn-day-pill.active { background: #0284c7 !important; color: #fff !important; border-color: #0284c7 !important; }
 /* Colour game: a light ring so black (and every colour) stands out on the dark card */
 :root[data-theme="dark"] .picture-swatch { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), 0 6px 18px rgba(0, 0, 0, 0.4); }
+
+/* Numbers game and mini-game notes */
+:root[data-theme="dark"] .num-level { background: #0f2a2a; border-color: #115e59; }
+:root[data-theme="dark"] .num-level.is-closed { background: #131c2e; border-color: #243046; }
+:root[data-theme="dark"] .num-levels-head h3, :root[data-theme="dark"] .num-head-level { color: #5eead4; }
+:root[data-theme="dark"] .num-head-score { background: #134e4a; color: #ccfbf1; }
+:root[data-theme="dark"] .num-question { background: linear-gradient(135deg, #0f2a2a 0%, #134e4a 100%); border-color: #115e59; }
+:root[data-theme="dark"] .num-prompt { color: #99f6e4; }
+:root[data-theme="dark"] .num-big, :root[data-theme="dark"] .num-words-big { color: #f0fdfa; }
+:root[data-theme="dark"] .num-option, :root[data-theme="dark"] .num-tile { background: #131c2e; color: #e5e7eb; }
+:root[data-theme="dark"] .num-option.is-correct, :root[data-theme="dark"] .num-tile.is-matched { background: #062a1c; color: #bbf7d0; }
+:root[data-theme="dark"] .num-option.is-wrong, :root[data-theme="dark"] .num-tile.is-wrong { background: #2b0d0d; color: #fecaca; }
+:root[data-theme="dark"] .num-tile.is-picked { background: #134e4a; }
+:root[data-theme="dark"] .games-new-title { background: #3b2a06; color: #fde68a; }
+:root[data-theme="dark"] .picture-hint { color: #94a3b8; }
+
+/* Payment reminder */
+:root[data-theme="dark"] .pay-reminder-soft, :root[data-theme="dark"] .pay-reminder-line-soft { background: #2a2306; border-color: #854d0e; color: #fde68a; }
+:root[data-theme="dark"] .pay-reminder-late, :root[data-theme="dark"] .pay-reminder-line-late { background: #2b1606; border-color: #9a3412; color: #fdba74; }
+:root[data-theme="dark"] .pay-reminder-debt, :root[data-theme="dark"] .pay-reminder-line-debt { background: #2b0d0d; border-color: #991b1b; color: #fecaca; }
+:root[data-theme="dark"] .pay-reminder-close { background: rgba(255, 255, 255, 0.08); }

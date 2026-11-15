@@ -1005,3 +1005,30 @@ dialog.app-modal::backdrop {
   .admin-teacher-filter { max-width: 104px; }
   .btn-theme-toggle { width: 30px; height: 30px; }
 }
+
+/* Attendance journal: lessons of the month that are still ahead */
+.att-table th.att-future { color: var(--color-text-muted); font-weight: 600; }
+.att-table td.att-future { background: repeating-linear-gradient(45deg, transparent 0 6px, rgba(148, 163, 184, 0.08) 6px 12px); min-width: 34px; }
+
+/* Classroom window: the student's name opens their card */
+.cls-open-profile { cursor: pointer; border-radius: var(--radius-md); }
+.cls-open-profile:hover .font-semibold, .cls-open-profile:hover span[style*="font-weight:700"], .cls-open-profile:hover div[style*="font-weight:700"] { text-decoration: underline; color: var(--color-primary) !important; }
+.cls-open-profile:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* Payment reminder for students (components/paymentReminder.js) */
+.pay-reminder { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: var(--space-4); border-radius: var(--radius-lg); border: 1.5px solid; font-size: 0.85rem; line-height: 1.3; }
+.pay-reminder-icon { font-size: 1.35rem; flex-shrink: 0; }
+.pay-reminder-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; color: inherit; text-decoration: none; }
+.pay-reminder-text strong { font-weight: 800; }
+.pay-reminder-text span { opacity: 0.85; font-size: 0.8rem; }
+.pay-reminder-close { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; border: none; background: rgba(0, 0, 0, 0.06); color: inherit; cursor: pointer; font-size: 0.8rem; }
+.pay-reminder-soft { background: #fefce8; border-color: #fde68a; color: #854d0e; }
+.pay-reminder-late { background: #fff7ed; border-color: #fdba74; color: #9a3412; }
+.pay-reminder-debt { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+.pay-reminder-line { margin-top: 12px; padding: 8px 10px; border-radius: var(--radius-md); font-size: 0.8rem; font-weight: 700; text-align: center; }
+.pay-reminder-line-soft { background: #fefce8; color: #854d0e; }
+.pay-reminder-line-late { background: #fff7ed; color: #9a3412; }
+.pay-reminder-line-debt { background: #fef2f2; color: #991b1b; }
+.pay-dot { display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 2px var(--color-bg-card, #fff); vertical-align: top; }
+.mobile-bottom-item .bottom-icon { position: relative; }
+.mobile-bottom-item .bottom-icon .pay-dot { position: absolute; top: -2px; right: -6px; margin: 0; }

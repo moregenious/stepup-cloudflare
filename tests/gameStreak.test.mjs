@@ -113,3 +113,65 @@ test('a freeze covers a missed day: streak and limit kept; max 3', () => {
   for (let i = 0; i < 3; i++) g2 = addFreeze(g2, at('2026-09-20')).ledger;
   assert.equal(addFreeze(g2, at('2026-09-20')).ok, false);
 });
+
+test('colours and animals: any time for English World 1, once a week for other textbooks', async () => {
+  const { easyGameCheck } = await import('../public/js/shared/gameStreak.js');
+  assert.equal(easyGameCheck({}, 'colors', 'English world 1', at('2026-11-10')).allowed, true);
+  assert.equal(easyGameCheck({ colors: '2026-W46' }, 'colors', 'English World 1', at('2026-11-10')).allowed, true, 'no limit for the first book');
+  const first = easyGameCheck(undefined, 'colors', 'Project 4', at('2026-11-10'));
+  assert.equal(first.allowed, true);
+  assert.equal(easyGameCheck(first.weeks, 'colors', 'Project 4', at('2026-11-15')).allowed, false, 'same week (Tue..Sun)');
+  assert.equal(easyGameCheck(first.weeks, 'animals', 'Project 4', at('2026-11-15')).allowed, true, 'each game has its own week');
+  assert.equal(easyGameCheck(first.weeks, 'colors', 'Project 4', at('2026-11-16')).allowed, true, 'next Monday');
+  assert.equal(easyGameCheck(first.weeks, 'words', 'Project 4', at('2026-11-15')).allowed, true, 'other games are not limited');
+  assert.equal(easyGameCheck({}, 'colors', '', at('2026-11-10')).limited, true, 'no textbook: limited');
+});
+
+test('a round gives at most 10 points; the same round sent again within 8 s gives nothing', async () => {
+  const { roundTooSoon, GAME_RULES } = await import('../public/js/shared/gameStreak.js');
+  const r = playGame(null, 100, at('2026-11-10'));
+  assert.equal(r.award, 10, 'a forged score of 100 counts as 10');
+  const t = at('2026-11-10').getTime();
+  const gl = { ...r.ledger, last: t };
+  assert.equal(roundTooSoon(gl, t + 2000), true, '2 s later: a repeat');
+  assert.equal(roundTooSoon(gl, t + GAME_RULES.MIN_ROUND_GAP_SEC * 1000), false, '8 s later: a new round');
+  assert.equal(roundTooSoon(r.ledger, t), false, 'no round with points yet');
+  assert.equal(normalizeLedgerKeepsLast(gl), t, 'the time survives storage');
+});
+
+function normalizeLedgerKeepsLast(gl) {
+  return playGame(gl, 0, at('2026-11-10')).ledger.last;
+}
+
+test('looks: new items need a purchase; what was worn before stays', async () => {
+  const { keepOwnedLooks, ownedByPurchases, cosmeticPrice } = await import('../public/js/shared/shopRules.js');
+  const none = ownedByPurchases([]);
+  // An old card without lists: the page builds them from what is worn
+  const old = { avatarUrl: '🦊', avatarFrame: 'frame-fire', studentTitle: '👑 Король домашки' };
+  const built = { ...old, unlockedAvatars: ['🦊'], unlockedFrames: ['frame-none', 'frame-fire'], unlockedTitles: ['👑 Король домашки'] };
+  assert.deepEqual(keepOwnedLooks(old, built, none), [], 'worn items are kept');
+  const greedy = { ...built, unlockedFrames: ['frame-none', 'frame-fire', 'frame-gold'], avatarUrl: '🐼' };
+  assert.deepEqual(keepOwnedLooks(built, greedy, none).sort(), ['avatarUrl', 'unlockedFrames']);
+  assert.deepEqual([greedy.unlockedFrames, greedy.avatarUrl], [['frame-none', 'frame-fire'], '🦊']);
+  const bought = ownedByPurchases([{ type: 'frame', itemId: 'frame-gold', status: 'completed' }, { type: 'avatar', itemId: '🐼', status: 'cancelled' }]);
+  const paid = { ...built, unlockedFrames: [...built.unlockedFrames, 'frame-gold'], unlockedAvatars: ['🦊', '🐼'] };
+  keepOwnedLooks(built, paid, bought);
+  assert.deepEqual([paid.unlockedFrames.includes('frame-gold'), paid.unlockedAvatars], [true, ['🦊']], 'a cancelled purchase does not count');
+  const photo = { ...built, avatarUrl: '/api/files/avatars/me.jpg' };
+  assert.deepEqual(keepOwnedLooks(built, photo, none), [], 'an uploaded photo is free');
+  assert.equal(cosmeticPrice('frame', 'frame-gold'), 100);
+  assert.equal(cosmeticPrice('avatar', '🐼'), 50);
+  assert.equal(cosmeticPrice('title', 'six-seven'), 500);
+  assert.equal(cosmeticPrice('title', 'six-seven', [{ text: 'six-seven', price: 700 }]), 700, 'the teachers\' price list wins');
+  assert.equal(cosmeticPrice('title', 'Директор школы'), null);
+});
+
+test('easy games: English World 1 and Project 1 play freely, numbers are limited like colours', async () => {
+  const { easyGameCheck } = await import('../public/js/shared/gameStreak.js');
+  const played = { colors: '2026-W46', animals: '2026-W46', numbers: '2026-W46' };
+  for (const book of ['English World 1', 'Project 1']) {
+    for (const game of ['colors', 'animals', 'numbers']) assert.equal(easyGameCheck(played, game, book, at('2026-11-12')).allowed, true, `${book}: ${game}`);
+  }
+  assert.equal(easyGameCheck(played, 'numbers', 'Project 4', at('2026-11-12')).allowed, false, 'numbers once a week for Project 4');
+  assert.equal(easyGameCheck(played, 'numbers', 'Project 10', at('2026-11-12')).allowed, false, 'Project 10 is not Project 1');
+});

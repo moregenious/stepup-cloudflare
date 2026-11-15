@@ -4,8 +4,9 @@
 import { config } from './config.js';
 import { getStorage } from './storage/index.js';
 import { HttpError } from './http.js';
-import { playGame, migrateLedger, addFreeze, GAME_RULES } from '../../public/js/shared/gameStreak.js';
+import { playGame, migrateLedger, addFreeze, easyGameCheck, roundTooSoon, schoolDay, EASY_GAMES, GAME_RULES } from '../../public/js/shared/gameStreak.js';
 import { hashPassword, derivePin } from './security.js';
+import { cosmeticPrice, isCosmeticPurchase, ownedByPurchases, keepOwnedLooks, LOOK_FIELDS } from '../../public/js/shared/shopRules.js';
 import {
   META_PATH, CREDS_PATH, SETTINGS, LIST_COLLS,
   shardPath, shardKeyFor, collOfShard, isKnownColl, isValidShardKey, emptyShard, parseShardDoc,
@@ -63,7 +64,8 @@ function pointContribution(rec) {
 
 function purchaseContribution(p) {
   if (!p || !p.studentId || p.status === 'cancelled') return null;
-  return { sid: p.studentId, gross: 0, life: 0, spent: Number(p.itemPrice) || Number(p.price) || 0 };
+  // Never negative: a negative price would add points instead of spending them
+  return { sid: p.studentId, gross: 0, life: 0, spent: Math.max(0, Number(p.itemPrice) || Number(p.price) || 0) };
 }
 
 function emptyLedger() {
@@ -399,6 +401,17 @@ function sameDay(dateIso, refDate, toleranceDays = 1) {
 }
 
 /**
+ * Date of a record a student creates: the device's time when it is close (a round played offline is sent later),
+ * otherwise the server's. Never in another school month (that would change a closed monthly rating) or in the future.
+ */
+function studentRecordDate(dateIso, now) {
+  const d = new Date(dateIso);
+  if (isNaN(d) || d - now > 5 * 60000 || !sameDay(dateIso, now, 2)) return now.toISOString();
+  if (schoolDay(d).slice(0, 7) !== schoolDay(now).slice(0, 7)) return now.toISOString();
+  return d.toISOString();
+}
+
+/**
  * The birthday present: once a year, on the birthday or within 14 days after it (the student may not open the site
  * that day). Day and month only: the year in the survey is often wrong. Returns the refusal, or marks the year as given;
  * the mark stays when the record is deleted, so a removed present is not given again.
@@ -434,7 +447,7 @@ function validateStudentPointRecord(rec, student, now) {
     type: 'add',
     points,
     excludeFromRating: Boolean(rec.excludeFromRating),
-    date: sameDay(rec.date, now, 2) ? rec.date : now.toISOString()
+    date: studentRecordDate(rec.date, now)
   };
   switch (rec.category) {
     case 'Анкета':
@@ -458,10 +471,21 @@ function validateStudentPointRecord(rec, student, now) {
  * A finished mini-game: the server updates the streak / weekly limit and decides how many points to award.
  * Returns the point record to store, or null when nothing is awarded (weekly limit reached, zero score).
  */
-function applyMiniGame(rec, student, now) {
-  const score = Number.isFinite(Number(rec.gameScore)) ? Number(rec.gameScore) : Number(rec.points);
+function applyMiniGame(rec, student, now, textbook = '') {
+  const date = studentRecordDate(rec.date, now);
   const base = migrateLedger(student.gameLedger, student.gameStats, now);
+  // The same round sent again (a second click on "finish", an old tab): no points
+  if (roundTooSoon(base, Date.parse(date))) return null;
+  // Colours / animals / numbers: once a week for groups past the first textbooks (shared rule in gameStreak.js).
+  // The game is also recognised by its title, so leaving out gameKey does not skip the limit.
+  const gameName = String(rec.gameTitle || '');
+  const gameKey = rec.gameKey || (gameName === 'Цвета' ? 'colors' : gameName === 'Животные' ? 'animals' : gameName.startsWith('Числа') ? 'numbers' : '');
+  const easy = easyGameCheck(student.easyGameWeeks, gameKey, textbook, now);
+  if (!easy.allowed) return null;
+  if (easy.limited) student.easyGameWeeks = easy.weeks;
+  const score = Number.isFinite(Number(rec.gameScore)) ? Number(rec.gameScore) : Number(rec.points);
   const result = playGame(base, score, now);
+  if (result.award > 0) result.ledger.last = Date.parse(date);
   student.gameLedger = result.ledger;
   if (result.award <= 0) return null;
   const title = typeof rec.gameTitle === 'string' && rec.gameTitle ? rec.gameTitle.slice(0, 120) : '';
@@ -476,7 +500,7 @@ function applyMiniGame(rec, student, now) {
     comment: title
       ? `🎮 ${title}: набрано ${result.score} (начислено +${result.award} ⭐ в профиль)`
       : String(rec.comment || '').slice(0, 300),
-    date: sameDay(rec.date, now, 2) ? rec.date : now.toISOString()
+    date
   };
 }
 
@@ -496,6 +520,15 @@ export async function push(user, rawOps) {
     const own = userShardKey(user);
     if (own) keysA.add(own);
     if (user.role === 'student' && live.some(op => op.c === 'purchases')) keysA.add('shopItems~0');
+    // A student's looks (avatar, frame, title): the shop's title list and the student's purchases decide what is theirs
+    const touchesLooks = (op) => (op.c === 'students' && (op.t === 'put'
+      || [...(op.set || []).map(([p]) => p), ...(op.unset || [])].some(p => Array.isArray(p) && LOOK_FIELDS.includes(String(p[0])))))
+      || (op.c === 'purchases' && isCosmeticPurchase(op.v));
+    const looksChecked = user.role === 'student' && live.some(touchesLooks);
+    if (looksChecked) {
+      keysA.add(shardKeyFor(SETTINGS, 'titlesCatalog'));
+      for (let i = 0; i < LIST_COLLS.purchases; i++) keysA.add(`purchases~${i}`);
+    }
     const needCreds = user.role === 'admin' && live.some(op => op.c === 'teachers' || (op.c === SETTINGS && op.id === 'admin'));
     const keysAList = [...keysA];
     const docsA = await tx.getMany([META_PATH, ...keysAList.map(shardPath), ...(needCreds ? [CREDS_PATH] : [])]);
@@ -518,6 +551,13 @@ export async function push(user, rawOps) {
       (op.set || []).forEach(([path, v]) => { if (path?.[0] === 'studentId' && v) ledgerStudentIds.add(String(v)); });
     });
     const keysB = [...new Set([...ledgerStudentIds].map(sid => shardKeyFor('students', sid)))].filter(k => !shards[k]);
+    // A student's easy mini-game: the group's textbook decides the weekly limit
+    const selfRow = user.role === 'student' ? findRowInShard(shards[own], user.uid) : null;
+    const easyGame = selfRow?.groupId && live.some(op => op.c === 'pointRecords' && EASY_GAMES.includes(op.v?.gameKey));
+    if (easyGame) {
+      const gkey = shardKeyFor('groups', String(selfRow.groupId));
+      if (!shards[gkey] && !keysB.includes(gkey)) keysB.push(gkey);
+    }
     if (keysB.length) {
       const docsB = await tx.getMany(keysB.map(shardPath));
       keysB.forEach((k, i) => { shards[k] = parseShardDoc(docsB[i]); });
@@ -542,6 +582,8 @@ export async function push(user, rawOps) {
       touchedStudents.add(c.sid);
     };
     const selfStudent = user.role === 'student' ? findRowInShard(shards[own], user.uid) : null;
+    const selfBefore = looksChecked && selfStudent ? clone(selfStudent) : null;
+    const titlesCatalog = looksChecked ? findRowInShard(shards[shardKeyFor(SETTINGS, 'titlesCatalog')], 'titlesCatalog') : null;
     let selfStudentDirty = false;
 
     const writeRow = (key, id, data) => {
@@ -578,6 +620,8 @@ export async function push(user, rawOps) {
           }
           const filtered = filterSelfPatch(patchOp, SELF_DENY.student);
           const next = applyPatch(existing, filtered);
+          // A birth date already on the card stays (the staff change it): a new one would bring another birthday present
+          if (existing.birthDate && next.birthDate !== existing.birthDate) next.birthDate = existing.birthDate;
           Object.assign(selfStudent, next);
           for (const k of Object.keys(selfStudent)) if (!(k in next)) delete selfStudent[k];
           selfStudentDirty = true;
@@ -606,7 +650,8 @@ export async function push(user, rawOps) {
         if (v.studentId !== user.uid) { reject(res, 'Запись принадлежит другому ученику'); continue; }
 
         if (op.c === 'pointRecords' && v.category === 'Мини-игры') {
-          const rec = applyMiniGame(v, selfStudent, now);
+          const group = selfStudent.groupId ? findRowInShard(shards[shardKeyFor('groups', String(selfStudent.groupId))], String(selfStudent.groupId)) : null;
+          const rec = applyMiniGame(v, selfStudent, now, group?.textbook || selfStudent.textbook || '');
           selfStudentDirty = true;
           if (rec) {
             writeRow(key, op.id, rec);
@@ -628,6 +673,8 @@ export async function push(user, rawOps) {
           const fr = addFreeze(migrateLedger(selfStudent.gameLedger, selfStudent.gameStats, now), now);
           if (!fr.ok) { reject(res, `Можно хранить не больше ${GAME_RULES.MAX_FREEZES} заморозок`); continue; }
           const rec = { ...v, price: GAME_RULES.FREEZE_PRICE, status: 'completed', studentName: selfStudent.fullName, date: now.toISOString(), itemName: '❄️ Заморозка серии', itemIcon: '❄️' };
+          // The spent amount is taken from itemPrice first: the student must not set it
+          delete rec.itemPrice; delete rec.cancelledAt; delete rec.cancelledBy;
           const l = getLedger(user.uid);
           if (Math.max(0, l.gross - l.spent) < rec.price) { reject(res, 'Недостаточно баллов'); continue; }
           selfStudent.gameLedger = fr.ledger;
@@ -639,6 +686,12 @@ export async function push(user, rawOps) {
 
         if (op.c === 'purchases') {
           const price = Math.max(0, Number(v.price) || 0);
+          if (isCosmeticPurchase(v)) {
+            // Avatar / frame / title: the shop's price, not the one the page sends
+            const shopPrice = cosmeticPrice(v.type, v.itemId, titlesCatalog);
+            if (shopPrice === null) { reject(res, 'Такого товара нет в магазине'); continue; }
+            if (price !== shopPrice) { reject(res, 'Цена товара изменилась, обновите страницу'); continue; }
+          }
           if (v.type === 'staff') {
             const item = findRowInShard(shards['shopItems~0'], v.itemId);
             if (!item) { reject(res, 'Товар не найден'); continue; }
@@ -755,6 +808,15 @@ export async function push(user, rawOps) {
       }
       if (LIST_COLLS[op.c] && isPlainObject(next)) next.id = op.id;
       writeRow(key, op.id, next);
+    }
+
+    // ---------- A student's looks: only what they bought (purchases of this push included) or earned ----------
+    if (looksChecked && selfStudentDirty && selfStudent) {
+      const myPurchases = [];
+      for (let i = 0; i < LIST_COLLS.purchases; i++) {
+        Object.values(shards[`purchases~${i}`]?.rows || {}).forEach(({ d }) => { if (d && d.studentId === user.uid) myPurchases.push(d); });
+      }
+      keepOwnedLooks(selfBefore, selfStudent, ownedByPurchases(myPurchases));
     }
 
     // ---------- Server-maintained student fields ----------

@@ -3,7 +3,7 @@
  */
 
 /** Fields of a student row that only the server computes */
-export const STUDENT_SERVER_FIELDS = ['totalPoints', 'lifetimePoints', 'pointsLedger', 'gameLedger', 'surveyBonusAwarded', 'lastBirthdayBonusYear'];
+export const STUDENT_SERVER_FIELDS = ['totalPoints', 'lifetimePoints', 'pointsLedger', 'gameLedger', 'surveyBonusAwarded', 'lastBirthdayBonusYear', 'easyGameWeeks'];
 /** Fields derived on the client and never stored */
 export const STUDENT_DERIVED_FIELDS = ['vocabularyPool'];
 

@@ -10,6 +10,7 @@ import { renderStudentAvatarHtml } from '../components/avatarCustomization.js';
 export const PaymentsView = {
   selectedMonthKey: null,
   filterGroup: 'all',
+  filterStatus: 'all', // 'all' | 'paid' | 'unpaid' for the chosen month
   searchQuery: '',
   selectedStudentIds: new Set(),
 
@@ -23,6 +24,9 @@ export const PaymentsView = {
     let students = store.getStudents();
     if (this.filterGroup !== 'all') {
       students = students.filter(s => s.groupId === this.filterGroup);
+    }
+    if (this.filterStatus !== 'all') {
+      students = students.filter(s => (store.getPayment(s.id, this.selectedMonthKey).status === 'paid') === (this.filterStatus === 'paid'));
     }
     if (this.searchQuery) {
       const q = this.searchQuery.toLowerCase().trim();
@@ -174,6 +178,15 @@ export const PaymentsView = {
         </div>
 
         <div class="filter-item">
+          <label class="form-label" style="margin:0; font-size:var(--font-size-xs); font-weight:700;">💳 Оплата:</label>
+          <select id="select-payment-status" class="form-control" style="min-width: 150px;">
+            <option value="all" ${this.filterStatus === 'all' ? 'selected' : ''}>Все ученики</option>
+            <option value="unpaid" ${this.filterStatus === 'unpaid' ? 'selected' : ''}>⏳ Не оплатили</option>
+            <option value="paid" ${this.filterStatus === 'paid' ? 'selected' : ''}>✓ Оплатили</option>
+          </select>
+        </div>
+
+        <div class="filter-item">
           <input type="search" id="input-payment-search" class="form-control" placeholder="Поиск по имени ученика..." value="${this.searchQuery}" style="width: 220px;" autocomplete="off">
         </div>
 
@@ -279,6 +292,13 @@ export const PaymentsView = {
     // Group filter
     container.querySelector('#select-payment-group')?.addEventListener('change', (e) => {
       this.filterGroup = e.target.value;
+      this.selectedStudentIds.clear();
+      this.render(container);
+    });
+
+    // Paid / unpaid filter
+    container.querySelector('#select-payment-status')?.addEventListener('change', (e) => {
+      this.filterStatus = e.target.value;
       this.selectedStudentIds.clear();
       this.render(container);
     });

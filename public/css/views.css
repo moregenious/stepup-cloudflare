@@ -5040,3 +5040,59 @@ tr.selected-row {
     min-width: 0;
   }
 }
+
+/* Mini-games: weekly limit of the easy games, new title note, Samsung hint */
+.games-choice-card.is-locked { opacity: 0.6; cursor: not-allowed; }
+.games-choice-card.is-locked:hover { transform: none; box-shadow: none; border-color: var(--color-border); }
+.games-new-title { margin-top: 10px; padding: 8px 12px; border-radius: var(--radius-md); background: #fef3c7; color: #92400e; font-weight: 800; }
+.picture-hint { font-size: 0.75rem; color: #64748b; max-width: 360px; }
+img.picture-swatch { background: none; }
+
+/* Numbers game */
+.num-game { padding: var(--space-5); border: 2px solid #0d9488; }
+.num-levels-head { text-align: center; margin-bottom: var(--space-4); }
+.num-levels-icon { font-size: 2.4rem; }
+.num-levels-head h3 { margin: 4px 0; color: #0f766e; font-size: 1.25rem; }
+.num-levels-head p { margin: 0; font-size: 0.85rem; color: var(--color-text-secondary); }
+.num-levels { display: flex; flex-direction: column; gap: 10px; }
+.num-level { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius-lg); border: 1.5px solid #99f6e4; background: #f0fdfa; }
+.num-level.is-closed { opacity: 0.6; border-color: var(--color-border); background: var(--color-bg-app); }
+.num-level-icon { font-size: 1.5rem; flex-shrink: 0; }
+.num-level-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.num-level-text b { font-size: 0.98rem; }
+.num-level-text span { font-size: 0.78rem; color: var(--color-text-muted); }
+.num-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: var(--space-3); }
+.num-head-level { font-weight: 800; color: #0f766e; flex: 1; min-width: 0; }
+.num-head-score { margin-left: auto; background: #ccfbf1; color: #0f766e; padding: 4px 12px; border-radius: 999px; font-weight: 800; font-size: 0.85rem; }
+.num-question { text-align: center; padding: var(--space-4); margin-bottom: var(--space-4); border-radius: var(--radius-xl); background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%); border: 1.5px solid #99f6e4; }
+.num-prompt { font-size: 0.9rem; color: #115e59; margin-bottom: 8px; }
+.num-big { font-size: 2.8rem; font-weight: 800; color: #134e4a; line-height: 1.2; }
+.num-words-big { font-size: 1.35rem; font-weight: 800; color: #134e4a; line-height: 1.35; }
+.num-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.num-options.is-words { grid-template-columns: 1fr; }
+.num-option, .num-tile {
+  min-height: 52px; padding: 10px 12px; border-radius: var(--radius-lg); border: 2px solid var(--color-border);
+  background: var(--color-bg-card); color: var(--color-text-main); font-size: 1rem; font-weight: 700; cursor: pointer; line-height: 1.3;
+  display: flex; align-items: center; justify-content: center; text-align: center; transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+.num-option-number { font-size: 1.5rem; font-weight: 800; }
+.num-option:hover, .num-tile:hover { border-color: #0d9488; }
+.num-option.is-correct, .num-tile.is-matched { border-color: #16a34a; background: #dcfce7; color: #14532d; }
+.num-option.is-wrong, .num-tile.is-wrong { border-color: #ef4444; background: #fee2e2; color: #7f1d1d; }
+.num-tile.is-picked { border-color: #0d9488; background: #ccfbf1; box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25); }
+.num-tile.is-matched { cursor: default; opacity: 0.75; }
+.num-match { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr); gap: 10px; margin-top: var(--space-3); }
+.num-match-col { display: flex; flex-direction: column; gap: 8px; }
+.num-tile-number { font-size: 1.25rem; font-weight: 800; }
+.num-tile-words { font-size: 0.9rem; }
+.num-inline { white-space: nowrap; }
+/* Fractions: numerator over denominator */
+.num-frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; line-height: 1; font-size: 0.85em; }
+.num-frac > span:first-child { border-bottom: 0.08em solid currentColor; padding: 0 0.15em 0.06em; }
+.num-frac > span:last-child { padding: 0.06em 0.15em 0; }
+@media (max-width: 480px) {
+  .num-big { font-size: 2.3rem; }
+  .num-head-score { width: 100%; text-align: center; }
+  .num-match { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.5fr); gap: 8px; }
+  .num-tile-words { font-size: 0.82rem; }
+}

@@ -36,6 +36,26 @@ export const AttendanceView = {
     return new Date(y, m - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase());
   },
 
+  /** Lessons of the group in the month by the schedule (joined lessons, moved and cancelled days included): Map date → lesson id */
+  scheduledDates(groupId, monthKey) {
+    const [y, m] = monthKey.split('-').map(Number);
+    const first = new Date(y, m - 1, 1);
+    const last = new Date(y, m, 0);
+    const monday = new Date(first);
+    monday.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+    const out = new Map();
+    for (const d = new Date(monday); d <= last; d.setDate(d.getDate() + 7)) {
+      const week = store.getWeekSchedule(new Date(d), { groupId });
+      (week.lessons || []).forEach(l => {
+        if (!l.date || !l.date.startsWith(monthKey)) return;
+        if (l.status === 'cancelled' || l.actualStatus === 'cancelled' || l.isVacationPaused) return;
+        if (l.groupId !== groupId && !(l.linkedGroupIds || []).includes(groupId)) return;
+        if (!out.has(l.date)) out.set(l.date, l.baseId || l.id);
+      });
+    }
+    return out;
+  },
+
   recordsFor(groupIds, monthKey) {
     const set = new Set(groupIds);
     return Object.values(store.state.attendance || {})
@@ -94,6 +114,12 @@ export const AttendanceView = {
       toast.info(`${ddmm(rec.date)}: ${next === 'present' ? 'был(а) на уроке' : 'отсутствовал(а)'}`);
       this.render(container);
     }));
+    // A lesson of the schedule without marks yet: the first click marks the student present
+    container.querySelectorAll('.att-cell[data-lesson]').forEach(td => td.addEventListener('click', () => {
+      store.setAttendanceMark(td.dataset.lesson, td.dataset.sid, 'present', td.dataset.date);
+      toast.info(`${ddmm(td.dataset.date)}: был(а) на уроке`);
+      this.render(container);
+    }));
     container.querySelectorAll('.att-open-group').forEach(btn => btn.addEventListener('click', () => {
       this.groupId = btn.dataset.gid;
       this.render(container);
@@ -110,12 +136,19 @@ export const AttendanceView = {
     const students = [...ids].map(id => store.getStudentById(id) || { id, fullName: '(удалённый ученик)' })
       .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'));
 
-    if (!recs.length) {
-      return `<div class="card text-muted" style="padding:var(--space-5);">За ${this.monthName(this.monthKey).toLowerCase()} отметок посещаемости в группе «${esc(group.name)}» нет.</div>`;
+    // Columns: every lesson of the month by the schedule (future ones too), plus dates that have marks
+    const scheduled = this.scheduledDates(group.id, this.monthKey);
+    const today = store.todayDateStr();
+    const dates = [...new Set([...scheduled.keys(), ...recs.map(r => r.date)])].sort();
+    if (!dates.length) {
+      return `<div class="card text-muted" style="padding:var(--space-5);">За ${this.monthName(this.monthKey).toLowerCase()} у группы «${esc(group.name)}» нет уроков в расписании и отметок посещаемости.</div>`;
     }
-    const keys = recs.map(keyOf);
+    const cols = dates.map(date => {
+      const rec = recs.find(r => r.date === date) || null;
+      return { date, rec, key: rec ? keyOf(rec) : null, lessonId: scheduled.get(date) || rec?.lessonId || null, future: date > today };
+    });
     const rows = students.map(s => {
-      const ms = recs.map(r => r.marks ? r.marks[s.id] : undefined);
+      const ms = cols.map(c => c.rec && c.rec.marks ? c.rec.marks[s.id] : undefined);
       const miss = ms.filter(m => m === 'absent').length;
       const was = ms.filter(m => m === 'present').length;
       const pct = (miss + was) ? Math.round(was / (miss + was) * 100) : null;
@@ -133,26 +166,31 @@ export const AttendanceView = {
 
     return `
       <div class="att-stats">
-        <div class="att-stat"><div class="att-stat-num">${recs.length}</div><div class="att-stat-label">уроков с отметками</div></div>
+        <div class="att-stat"><div class="att-stat-num">${recs.length} / ${cols.length}</div><div class="att-stat-label">уроков отмечено / всего в месяце</div></div>
         <div class="att-stat"><div class="att-stat-num">${avg}%</div><div class="att-stat-label">средняя посещаемость</div></div>
         <div class="att-stat"><div class="att-stat-num" style="color:#b91c1c;">${totalMiss}</div><div class="att-stat-label">пропусков всего</div></div>
       </div>
       <div class="card" style="padding: var(--space-3); margin-bottom: var(--space-4);">
         <div style="overflow-x:auto;">
           <table class="lm-journal-table att-table">
-            <thead><tr><th>Ученик</th>${recs.map(r => `<th>${ddmm(r.date)}<br><span class="att-dow">${dow(r.date)}</span></th>`).join('')}<th>Проп.</th><th>%</th></tr></thead>
+            <thead><tr><th>Ученик</th>${cols.map(c => `<th class="${c.future ? 'att-future' : ''}">${ddmm(c.date)}<br><span class="att-dow">${dow(c.date)}</span></th>`).join('')}<th>Проп.</th><th>%</th></tr></thead>
             <tbody>
               ${rows.map(({ s, ms, miss, pct }) => `
                 <tr>
                   <td class="lm-j-name">${esc(s.fullName)}</td>
-                  ${ms.map((m, i) => `<td class="lm-j att-cell ${m === 'present' ? 'ok' : m === 'absent' ? 'no' : ''}" data-key="${keys[i]}" data-sid="${s.id}" title="Нажмите, чтобы изменить">${m === 'present' ? '✓' : m === 'absent' ? '✕' : '·'}</td>`).join('')}
+                  ${ms.map((m, i) => {
+                    const c = cols[i];
+                    if (c.future && !m) return '<td class="lm-j att-future" title="Урок ещё не прошёл"></td>';
+                    const target = c.key ? `data-key="${c.key}"` : (c.lessonId ? `data-lesson="${c.lessonId}" data-date="${c.date}"` : '');
+                    return `<td class="lm-j att-cell ${m === 'present' ? 'ok' : m === 'absent' ? 'no' : ''}" ${target} data-sid="${s.id}" title="Нажмите, чтобы ${m ? 'изменить' : 'отметить'}">${m === 'present' ? '✓' : m === 'absent' ? '✕' : '·'}</td>`;
+                  }).join('')}
                   <td class="lm-j-pct" style="color:${miss ? '#b91c1c' : 'inherit'};">${miss}</td>
                   <td class="lm-j-pct">${pct === null ? '—' : pct + '%'}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
         </div>
-        <div class="text-xs text-muted" style="margin-top:8px;">✓ — был, ✕ — пропустил, · — не отмечен. Нажмите на ✓ / ✕, чтобы исправить отметку.</div>
+        <div class="text-xs text-muted" style="margin-top:8px;">✓ — был, ✕ — пропустил, · — не отмечен, пустая клетка — урок ещё впереди. Нажмите на клетку, чтобы поставить или исправить отметку.</div>
       </div>
       <div class="card" style="padding: var(--space-4);">
         <h3 class="card-title" style="margin-bottom:8px;">Пропуски</h3>

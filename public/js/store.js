@@ -6,27 +6,11 @@
 import { MONTH_NAMES } from './data/seedData.js';
 import { SyncEngine } from './sync.js';
 import { trackGameEnd } from './analytics.js';
-import { GAME_RULES, viewLedger, playGame, migrateLedger } from './shared/gameStreak.js';
+import { GAME_RULES, viewLedger, playGame, migrateLedger, easyGameCheck } from './shared/gameStreak.js';
 
-/** Titles earned in mini-games (never sold) */
-export const SECRET_TITLE_NAMES = ['Словарный ниндзя', 'Укротитель глаголов', 'Мастер «если бы»', 'Архитектор миров', 'Хранитель времени', 'Повелитель Rampage', 'Инженер предложений', 'Снайпер предлогов', 'Фразовый хакер', 'Грамматический детектив', 'Молния синонимов', 'Легенда Step Up'];
-
-/** Titles sold in the shop before teachers edit the list (then state.titlesCatalog is used) */
-export const DEFAULT_TITLES = [
-  { id: 't-boltun', text: 'Лучший болтун', icon: '🗣️', price: 150 },
-  { id: 't-grammar', text: 'Гений грамматики', icon: '🧠', price: 150 },
-  { id: 't-hw-king', text: 'Король домашки', icon: '👑', price: 150 },
-  { id: 't-pp', text: 'Гроза Present Perfect', icon: '⚡', price: 150 },
-  { id: 't-owl', text: 'Ночной зубрила', icon: '🦉', price: 150 },
-  { id: 't-sherlock', text: 'Шерлок Холмс произношения', icon: '🕵️‍♂️', price: 150 },
-  { id: 't-spy', text: 'Шпион в Лондоне', icon: '🇬🇧', price: 150 },
-  { id: 't-memes', text: 'Главный по мемам', icon: '😎', price: 150 },
-  { id: 't-questions', text: 'Генератор вопросов', icon: '❓', price: 150 },
-  { id: 't-listener', text: 'Слушатель на 100%', icon: '🎧', price: 150 },
-  { id: 't-irregular', text: 'Повелитель неправильных глаголов', icon: '⚔️', price: 150 },
-  { id: 't-polyglot', text: 'Будущий полиглот', icon: '🚀', price: 150 },
-  { id: 't-67', text: 'six-seven', icon: '6️⃣7️⃣', price: 500 }
-];
+// Shop titles and secret titles live in the shared shop rules (the server checks purchases with them)
+import { SECRET_TITLE_NAMES, DEFAULT_TITLES } from './shared/shopRules.js';
+export { SECRET_TITLE_NAMES, DEFAULT_TITLES };
 import { apiRequest, getServerConfig, onUnauthorized } from './api.js';
 import { logger } from './utils/logger.js';
 import { toast } from './components/toast.js';
@@ -63,7 +47,8 @@ const SECRET_TITLE_RENAMES = {
 const SECRET_TITLE_ICONS = {
   'Словарный ниндзя': '🥷', 'Укротитель глаголов': '🐉', 'Мастер «если бы»': '🔮', 'Архитектор миров': '🏛️',
   'Хранитель времени': '⏳', 'Повелитель Rampage': '🌀', 'Инженер предложений': '🏗️', 'Снайпер предлогов': '🎯',
-  'Фразовый хакер': '🚀', 'Грамматический детектив': '🕵️', 'Молния синонимов': '⚡', 'Легенда Step Up': '👑'
+  'Фразовый хакер': '🚀', 'Грамматический детектив': '🕵️', 'Молния синонимов': '⚡',
+  'Художник радуги': '🌈', 'Смотритель зоопарка': '🦒', 'Повелитель чисел': '🔢', 'Мастер дробей': '➗', 'Легенда Step Up': '👑'
 };
 
 /** Words for the word game when a student has no lesson words yet */
@@ -4157,7 +4142,8 @@ class Store {
     return out;
   }
 
-  getStudentAttendanceStats(studentId) {
+  /** Attendance of a student; { monthKey: 'YYYY-MM' } counts one month only (as the attendance journal shows it) */
+  getStudentAttendanceStats(studentId, { monthKey = null } = {}) {
     const student = this.getStudentById(studentId);
     if (!student) return { total: 0, attended: 0, missed: 0, percentage: 100, history: [] };
     const history = [];
@@ -4173,6 +4159,9 @@ class Store {
       if (history.some(h => h.date === l.date && h.lessonId === l.id)) return;
       history.push({ lessonId: l.id, date: l.date, time: l.time, topic: l.topic, status: l.attendance[studentId] === 'absent' ? 'absent' : 'present' });
     });
+    if (monthKey) {
+      for (let i = history.length - 1; i >= 0; i--) if (!String(history[i].date || '').startsWith(monthKey)) history.splice(i, 1);
+    }
     history.sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const attended = history.filter(h => h.status === 'present').length;
     const missed = history.length - attended;
@@ -4402,6 +4391,8 @@ class Store {
       synonymsStreak: student.gameStats.synonymsStreak || 0,
       colorsStreak: student.gameStats.colorsStreak || 0,
       animalsStreak: student.gameStats.animalsStreak || 0,
+      numbersStreak: student.gameStats.numbersStreak || 0,
+      unlockedNumberLevels: Array.isArray(student.gameStats.unlockedNumberLevels) && student.gameStats.unlockedNumberLevels.length ? student.gameStats.unlockedNumberLevels : ['easy'],
       unlockedTenseLevels: student.gameStats.unlockedTenseLevels,
       unlockedSecretTitles: (student.unlockedTitles || []).filter(t => SECRET_TITLE_NAMES.includes(t)),
       irregularRecentIds: student.gameStats.irregularRecentIds,
@@ -4421,6 +4412,14 @@ class Store {
       const g = viewLedger(this.effectiveGameLedger(student));
       return { pointsEarned: 0, pointsAwarded: 0, weeklyTotal: g.weeklyPoints, weeklyLimit: g.weeklyLimit, dailyStreak: g.dailyStreak, streakBonus: g.streakBonus, capReached: g.weeklyPoints >= g.weeklyLimit };
     }
+
+    // Colours / animals: once a week for groups past the first textbook (the server checks it too)
+    const easy = easyGameCheck(student.easyGameWeeks, gameKey, this.studentTextbook(student));
+    if (!easy.allowed) {
+      const g = viewLedger(this.effectiveGameLedger(student));
+      return { pointsEarned: rawPoints, pointsAwarded: 0, weeklyTotal: g.weeklyPoints, weeklyLimit: g.weeklyLimit, dailyStreak: g.dailyStreak, streakBonus: g.streakBonus, capReached: false, weekLocked: true };
+    }
+    if (easy.limited) student.easyGameWeeks = easy.weeks;
 
     // Same calculation the server makes; the server's answer replaces this preview
     const result = playGame(this.effectiveGameLedger(student), rawPoints);
@@ -4456,6 +4455,20 @@ class Store {
       streakBonus: result.streakBonus,
       capReached: result.weeklyPoints >= result.weeklyLimit
     };
+  }
+
+  /** Textbook that sets the student's level: the group's, otherwise the student's own */
+  studentTextbook(student) {
+    const group = student?.groupId ? this.getGroupById(student.groupId) : null;
+    return group?.textbook || student?.textbook || '';
+  }
+
+  /** Easy game (colours / animals) for an older group: { limited, locked } — locked = already played this week */
+  easyGameStatus(studentId, gameKey) {
+    const student = this.getStudentById(studentId);
+    if (!student) return { limited: false, locked: false };
+    const check = easyGameCheck(student.easyGameWeeks, gameKey, this.studentTextbook(student));
+    return { limited: check.limited, locked: !check.allowed };
   }
 
   /** Server ledger, or the local preview of games the server has not confirmed yet */
@@ -4634,10 +4647,26 @@ class Store {
       } else {
         student.gameStats.mistakesStreak = 0;
       }
-    } else if (gameKey === 'colors' || gameKey === 'animals') {
-      // Picture quizzes for the youngest: a streak of perfect rounds, no secret title
+    } else if (gameKey === 'colors' || gameKey === 'animals' || gameKey === 'numbers') {
+      // Games for the youngest: 3 perfect rounds in a row open a secret title
       const key = `${gameKey}Streak`;
       student.gameStats[key] = (score === total && total >= 10) ? (student.gameStats[key] || 0) + 1 : 0;
+      const streakTitle = { colors: 'Художник радуги', animals: 'Смотритель зоопарка', numbers: 'Повелитель чисел' }[gameKey];
+      if (student.gameStats[key] >= 3 && this.unlockSecretTitle(studentId, streakTitle)) newTitleUnlocked = streakTitle;
+      if (gameKey === 'numbers') {
+        // Levels open like in the tenses game: 8 of 10 opens the next one; the hard level gives its own title
+        const order = ['easy', 'middle', 'hard'];
+        const level = order.includes(meta.level) ? meta.level : 'easy';
+        if (!Array.isArray(student.gameStats.unlockedNumberLevels)) student.gameStats.unlockedNumberLevels = ['easy'];
+        if (score >= 8) {
+          const next = order[order.indexOf(level) + 1];
+          if (next && !student.gameStats.unlockedNumberLevels.includes(next)) {
+            student.gameStats.unlockedNumberLevels.push(next);
+            levelUnlocked = next;
+          }
+          if (level === 'hard' && this.unlockSecretTitle(studentId, 'Мастер дробей')) newTitleUnlocked = newTitleUnlocked || 'Мастер дробей';
+        }
+      }
     } else if (gameKey === 'synonyms') {
       if (score === total && total >= 10) {
         student.gameStats.synonymsStreak = (student.gameStats.synonymsStreak || 0) + 1;
@@ -4653,7 +4682,7 @@ class Store {
     }
 
     // Meta check: Unlocking 5 secret titles awards "Легенда Step Up"
-    const SECRET_NAMES = ['Словарный ниндзя', 'Укротитель глаголов', 'Мастер «если бы»', 'Архитектор миров', 'Хранитель времени', 'Повелитель Rampage', 'Инженер предложений', 'Снайпер предлогов', 'Фразовый хакер', 'Грамматический детектив', 'Молния синонимов'];
+    const SECRET_NAMES = ['Словарный ниндзя', 'Укротитель глаголов', 'Мастер «если бы»', 'Архитектор миров', 'Хранитель времени', 'Повелитель Rampage', 'Инженер предложений', 'Снайпер предлогов', 'Фразовый хакер', 'Грамматический детектив', 'Молния синонимов', 'Художник радуги', 'Смотритель зоопарка', 'Повелитель чисел', 'Мастер дробей'];
     const secretCount = Array.isArray(student.unlockedTitles) ? student.unlockedTitles.filter(t => SECRET_NAMES.includes(t)).length : 0;
     if (secretCount >= 5) {
       const unlockedLegend = this.unlockSecretTitle(studentId, 'Легенда Step Up');
@@ -4673,7 +4702,7 @@ class Store {
     else if (gameKey === 'phrasal') currentStreak = student.gameStats.phrasalStreak || 0;
     else if (gameKey === 'mistakes') currentStreak = student.gameStats.mistakesStreak || 0;
     else if (gameKey === 'synonyms') currentStreak = student.gameStats.synonymsStreak || 0;
-    else if (gameKey === 'colors' || gameKey === 'animals') currentStreak = student.gameStats[`${gameKey}Streak`] || 0;
+    else if (gameKey === 'colors' || gameKey === 'animals' || gameKey === 'numbers') currentStreak = student.gameStats[`${gameKey}Streak`] || 0;
 
     return {
       newTitleUnlocked,

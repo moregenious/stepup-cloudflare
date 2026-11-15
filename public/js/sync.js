@@ -19,7 +19,7 @@ const TRANSIENT_KEYS = new Set(['lastUpdated', 'exportedAt']);
 
 /** Student fields computed by the server or derived on the client — never diffed */
 const IGNORED_FIELDS = {
-  students: new Set(['vocabularyPool', 'totalPoints', 'lifetimePoints', 'pointsLedger', 'gameLedger', 'surveyBonusAwarded', 'lastBirthdayBonusYear'])
+  students: new Set(['vocabularyPool', 'totalPoints', 'lifetimePoints', 'pointsLedger', 'gameLedger', 'surveyBonusAwarded', 'lastBirthdayBonusYear', 'easyGameWeeks'])
 };
 
 const CACHE_PREFIX = 'stepup_cache_v2_';
