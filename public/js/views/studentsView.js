@@ -127,7 +127,8 @@ export const StudentsView = {
     const payment = store.getPayment(student.id, currMonth.key);
     const isPaid = payment && payment.status === 'paid';
     // This month, like the attendance journal; the whole year is in the tooltip
-    const attStats = store.getStudentAttendanceStats(student.id, { monthKey: currMonth.key });
+    const attMonth = store.getStudentAttendanceMonth(student.id); // the group's month of 8 lessons
+    const attStats = store.getStudentAttendanceStats(student.id, { monthKey: attMonth.key });
     const attAll = store.getStudentAttendanceStats(student.id);
 
     return `
@@ -167,7 +168,7 @@ export const StudentsView = {
               <span class="badge ${shiftClass}">${student.shift} смена</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Посещаемость (${currMonth.shortName.toLowerCase()}):</span>
+              <span class="detail-label">Посещаемость (${attMonth.shortName.toLowerCase()}):</span>
               <span class="detail-val" style="font-weight:700; color:${attStats.percentage >= 80 ? 'var(--color-success)' : 'var(--color-warning-text)'};" title="За всё время: ${attAll.percentage}% (${attAll.attended} из ${attAll.total})">
                 ${attStats.total ? `${attStats.percentage}% (${attStats.attended}/${attStats.total})` : 'нет отметок'}
               </span>
@@ -550,7 +551,8 @@ export const StudentsView = {
     const currentMonth = store.getCurrentAcademicMonth();
     const monthlyLeaderboard = store.getGroupMonthlyLeaderboard(student.groupId, currentMonth.year, currentMonth.monthIndex);
     const myRankObj = monthlyLeaderboard.find(l => l.studentId === student.id);
-    const profileAttStats = store.getStudentAttendanceStats(studentId, { monthKey: currentMonth.key });
+    const attMonth = store.getStudentAttendanceMonth(studentId);
+    const profileAttStats = store.getStudentAttendanceStats(studentId, { monthKey: attMonth.key });
     const profileAttAll = store.getStudentAttendanceStats(studentId);
     const profilePayment = store.getPayment(studentId, currentMonth.key);
     const profileIsPaid = profilePayment && profilePayment.status === 'paid';
@@ -594,8 +596,8 @@ export const StudentsView = {
               </span>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); font-size:var(--font-size-sm);">
-              <div><strong>Посещаемость за ${currentMonth.shortName.toLowerCase()}:</strong> ${profileAttStats.total ? `<span style="font-weight:700; color:${profileAttStats.percentage >= 80 ? '#16a34a' : '#ea580c'};">${profileAttStats.percentage}%</span> (${profileAttStats.attended} из ${profileAttStats.total} уроков)` : 'нет отметок'}</div>
-              <div><strong>Пропусков за ${currentMonth.shortName.toLowerCase()}:</strong> <span style="font-weight:700; color:${profileAttStats.missed > 0 ? '#dc2626' : 'inherit'};">${profileAttStats.missed}</span></div>
+              <div><strong>Посещаемость за ${attMonth.shortName.toLowerCase()}:</strong> ${profileAttStats.total ? `<span style="font-weight:700; color:${profileAttStats.percentage >= 80 ? '#16a34a' : '#ea580c'};">${profileAttStats.percentage}%</span> (${profileAttStats.attended} из ${profileAttStats.total} уроков)` : 'нет отметок'}</div>
+              <div><strong>Пропусков за ${attMonth.shortName.toLowerCase()}:</strong> <span style="font-weight:700; color:${profileAttStats.missed > 0 ? '#dc2626' : 'inherit'};">${profileAttStats.missed}</span></div>
               <div class="text-xs text-muted" style="grid-column: 1 / -1;">За всё время: ${profileAttAll.percentage}% (${profileAttAll.attended} из ${profileAttAll.total}), пропусков ${profileAttAll.missed}</div>
             </div>
           </div>

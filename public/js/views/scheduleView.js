@@ -933,6 +933,16 @@ export const ScheduleView = {
             else this.refresh();
           },
           () => {
+            // Another day chosen for this one lesson: a real move (the old date disappears, the new one appears)
+            const origDate = defaultDateStr || lesson.date;
+            if (origDate && dateVal && origDate !== dateVal) {
+              store.moveLessonOccurrence(lesson.baseId || lesson.id, origDate, dateVal, payload);
+              modal.close();
+              toast.success(`✅ Урок перенесён с ${origDate.slice(8, 10)}.${origDate.slice(5, 7)} на ${dateVal.slice(8, 10)}.${dateVal.slice(5, 7)}`);
+              if (typeof onSaved === 'function') onSaved();
+              else this.refresh();
+              return;
+            }
             store.updateLesson(lesson.id, payload, 'single', dateVal);
             modal.close();
             toast.success('✅ Изменения сохранены для этого урока');

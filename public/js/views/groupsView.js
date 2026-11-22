@@ -374,6 +374,17 @@ export const GroupsView = {
 
           <div class="form-row">
             <div class="form-group">
+              <label class="form-label">Начало занятий группы</label>
+              <input type="date" name="startDate" class="form-control" value="">
+              <span class="text-xs text-muted" style="margin-top: 4px; display: block;">
+                Оставьте пустым, если группа учится с начала учебного года. Для новой группы посреди года — дата первого урока: с неё считаются её месяцы (8 уроков = 1 месяц учебника).
+              </span>
+            </div>
+          </div>
+
+
+          <div class="form-row">
+            <div class="form-group">
               <label class="form-label">Кабинет / Формат</label>
               <input type="text" name="classroom" class="form-control" placeholder="Кабинет 2 или Онлайн (Zoom)">
             </div>
@@ -529,7 +540,8 @@ export const GroupsView = {
             textbook: chosenTextbook,
             shift: formData.get('shift'),
             classroom: formData.get('classroom'),
-            description: formData.get('description')
+            description: formData.get('description'),
+            startDate: formData.get('startDate') || ''
           };
 
           const newGroup = store.addGroup(groupData);
@@ -616,6 +628,17 @@ export const GroupsView = {
               </select>
             </div>
           </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Начало занятий группы</label>
+              <input type="date" name="startDate" class="form-control" value="${group.startDate || ''}">
+              <span class="text-xs text-muted" style="margin-top: 4px; display: block;">
+                Оставьте пустым, если группа учится с начала учебного года. Для новой группы посреди года — дата первого урока: с неё считаются её месяцы (8 уроков = 1 месяц учебника).
+              </span>
+            </div>
+          </div>
+
 
           <div class="form-row">
             <div class="form-group">
@@ -768,7 +791,8 @@ export const GroupsView = {
             textbook: chosenTextbook,
             shift: formData.get('shift'),
             classroom: formData.get('classroom'),
-            description: formData.get('description')
+            description: formData.get('description'),
+            startDate: formData.get('startDate') || ''
           });
 
           // Sync student group assignments

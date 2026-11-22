@@ -25,19 +25,27 @@ export const AttendanceView = {
     return groups;
   },
 
+  /** Months of the school year (a month = 8 lessons of the group, see store.getGroupLessonMonths) */
   monthOptions() {
-    const keys = new Set(Object.values(store.state.attendance || {}).map(r => r && r.date ? r.date.slice(0, 7) : null).filter(Boolean));
-    keys.add(store.todayDateStr().slice(0, 7));
-    return [...keys].sort().reverse();
+    return store.getAcademicMonthsList().map(m => m.key);
   },
 
   monthName(key) {
-    const [y, m] = key.split('-').map(Number);
-    return new Date(y, m - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase());
+    const m = store.getAcademicMonthsList().find(x => x.key === key);
+    if (m) return m.name;
+    const [y, mm] = key.split('-').map(Number);
+    return new Date(y, mm - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase());
   },
 
-  /** Lessons of the group in the month by the schedule (joined lessons, moved and cancelled days included): Map date → lesson id */
+  /** Lessons of the group in its month of 8 lessons (moved, cancelled and joined lessons included): Map date → lesson id */
   scheduledDates(groupId, monthKey) {
+    const month = store.getGroupLessonMonth(groupId, monthKey);
+    if (month) return new Map(month.dates.map((d, i) => [d, month.lessonIds[i]]));
+    return this.calendarDates(groupId, monthKey);
+  },
+
+  /** Fallback for a group without a weekly schedule: the lessons of the calendar month */
+  calendarDates(groupId, monthKey) {
     const [y, m] = monthKey.split('-').map(Number);
     const first = new Date(y, m - 1, 1);
     const last = new Date(y, m, 0);
@@ -56,17 +64,24 @@ export const AttendanceView = {
     return out;
   },
 
+  /** Marks of the groups in the month: the days of each group's month of 8 lessons (calendar month without a schedule) */
   recordsFor(groupIds, monthKey) {
-    const set = new Set(groupIds);
+    const ranges = new Map(groupIds.map(id => {
+      const m = store.getGroupLessonMonth(id, monthKey);
+      return [id, m ? [m.rangeFrom, m.until] : null];
+    }));
     return Object.values(store.state.attendance || {})
-      .filter(r => r && r.groupId && set.has(r.groupId) && r.date && r.date.startsWith(monthKey))
+      .filter(r => {
+        if (!r || !r.groupId || !ranges.has(r.groupId) || !r.date) return false;
+        const range = ranges.get(r.groupId);
+        return range ? r.date >= range[0] && r.date <= range[1] : r.date.startsWith(monthKey);
+      })
       .sort((a, b) => a.date.localeCompare(b.date));
   },
 
   render(container) {
     const groups = this.myGroups();
     const months = this.monthOptions();
-    if (!this.monthKey || !months.includes(this.monthKey)) this.monthKey = months[0];
     if (this.groupId !== 'all' && !groups.some(g => g.id === this.groupId)) {
       // Default: the group with the most recent attendance marks
       const ids = new Set(groups.map(g => g.id));
@@ -75,6 +90,16 @@ export const AttendanceView = {
         .sort((a, b) => b.date.localeCompare(a.date))[0];
       this.groupId = latest ? latest.groupId : (groups[0] ? groups[0].id : 'all');
     }
+    // Until a month is chosen by hand: the group's current month of 8 lessons (30.11 is already December for Mon/Thu)
+    if (!this.monthChosen || !months.includes(this.monthKey)) {
+      const current = this.groupId !== 'all' ? store.getGroupCurrentLessonMonth(this.groupId) : null;
+      this.monthKey = (current || store.getCurrentAcademicMonth()).key;
+    }
+    const groupMonths = this.groupId !== 'all' ? store.getGroupLessonMonths(this.groupId) : [];
+    const monthLabel = (k) => {
+      const gm = groupMonths.find(m => m.key === k);
+      return gm ? `${gm.name} · ${ddmm(gm.dates[0])}–${ddmm(gm.dates[gm.dates.length - 1])}` : this.monthName(k);
+    };
 
     container.innerHTML = `
       <div class="section-header">
@@ -94,7 +119,7 @@ export const AttendanceView = {
         <div class="form-group" style="margin:0; min-width:180px;">
           <label class="form-label">Месяц</label>
           <select id="att-month" class="form-control">
-            ${months.map(k => `<option value="${k}" ${k === this.monthKey ? 'selected' : ''}>${this.monthName(k)}</option>`).join('')}
+            ${months.map(k => `<option value="${k}" ${k === this.monthKey ? 'selected' : ''}>${monthLabel(k)}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -102,7 +127,7 @@ export const AttendanceView = {
     `;
 
     container.querySelector('#att-group')?.addEventListener('change', (e) => { this.groupId = e.target.value; this.render(container); });
-    container.querySelector('#att-month')?.addEventListener('change', (e) => { this.monthKey = e.target.value; this.render(container); });
+    container.querySelector('#att-month')?.addEventListener('change', (e) => { this.monthKey = e.target.value; this.monthChosen = true; this.render(container); });
     container.querySelectorAll('.att-cell[data-key]').forEach(td => td.addEventListener('click', () => {
       const rec = (store.state.attendance || {})[td.dataset.key];
       if (!rec) return;

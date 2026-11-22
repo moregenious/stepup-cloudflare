@@ -162,3 +162,7 @@
 :root[data-theme="dark"] .pay-reminder-late, :root[data-theme="dark"] .pay-reminder-line-late { background: #2b1606; border-color: #9a3412; color: #fdba74; }
 :root[data-theme="dark"] .pay-reminder-debt, :root[data-theme="dark"] .pay-reminder-line-debt { background: #2b0d0d; border-color: #991b1b; color: #fecaca; }
 :root[data-theme="dark"] .pay-reminder-close { background: rgba(255, 255, 255, 0.08); }
+
+/* School year table */
+:root[data-theme="dark"] .sy-table tr.sy-current td { background: #1e1b4b; }
+:root[data-theme="dark"] .sy-warning { background: #2b1606; color: #fdba74; }

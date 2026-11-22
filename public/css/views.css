@@ -5096,3 +5096,23 @@ img.picture-swatch { background: none; }
   .num-match { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.5fr); gap: 8px; }
   .num-tile-words { font-size: 0.82rem; }
 }
+
+/* School year: dates and the table of lessons by month (views/schoolYearView.js) */
+.sy-dates, .sy-table-card { padding: var(--space-4); margin-bottom: var(--space-4); }
+.sy-dates-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
+.sy-dates-grid .form-group { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.sy-table-wrap { overflow-x: auto; }
+.sy-table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 0.85rem; }
+.sy-table th, .sy-table td { border: 1px solid var(--color-border); padding: 7px 6px; text-align: center; }
+.sy-table thead th { background: var(--color-bg-app); font-weight: 700; font-size: 0.78rem; }
+.sy-table td.sy-month { text-align: left; font-weight: 800; white-space: nowrap; }
+.sy-table td.sy-past { color: var(--color-text-muted); }
+.sy-table tr.sy-current td { background: #eef2ff; font-weight: 700; }
+.sy-table tr.sy-current td.sy-month::after { content: ' ← сейчас'; font-size: 0.7rem; font-weight: 600; color: var(--color-primary); }
+.sy-warning { margin-top: var(--space-3); padding: 8px 12px; border-radius: var(--radius-md); background: #fff7ed; color: #9a3412; font-size: 0.82rem; font-weight: 600; }
+@media (max-width: 768px) {
+  .sy-dates-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 420px) {
+  .sy-dates-grid { grid-template-columns: 1fr; }
+}

@@ -343,7 +343,8 @@ export const StudentCabinet = {
     const toPrepositional = (m) => ({ 'Январь': 'январь', 'Февраль': 'февраль', 'Март': 'март', 'Апрель': 'апрель', 'Май': 'май', 'Июнь': 'июнь', 'Сентябрь': 'сентябрь', 'Октябрь': 'октябрь', 'Ноябрь': 'ноябрь', 'Декабрь': 'декабрь' }[m] || m);
 
     // Attendance stats
-    const attStats = store.getStudentAttendanceStats(student.id, { monthKey: currentAcademicMonth.key });
+    const attMonth = store.getStudentAttendanceMonth(student.id); // the group's month of 8 lessons
+    const attStats = store.getStudentAttendanceStats(student.id, { monthKey: attMonth.key });
 
     // Next upcoming lesson
     const upcomingLesson = mySchedule.find(s => s.status === 'planned');
@@ -472,7 +473,7 @@ export const StudentCabinet = {
               📚 Учебник: <strong>${textbookName || 'Не указан'}</strong>
             </div>
             <div style="background: rgba(255,255,255,0.15); padding: var(--space-2) var(--space-4); border-radius: var(--radius-full); font-size: var(--font-size-sm);">
-              📊 Посещаемость за ${toPrepositional(currentMonthName)}: <strong>${attStats.total ? attStats.percentage + '%' : 'нет отметок'}</strong>${attStats.total ? ` (${attStats.attended}/${attStats.total} уроков)` : ''}
+              📊 Посещаемость за ${toPrepositional(attMonth.shortName)}: <strong>${attStats.total ? attStats.percentage + '%' : 'нет отметок'}</strong>${attStats.total ? ` (${attStats.attended}/${attStats.total} уроков)` : ''}
             </div>
             <div style="background: rgba(255,255,255,0.15); padding: var(--space-2) var(--space-4); border-radius: var(--radius-full); font-size: var(--font-size-sm);">
               🏫 ${formatGrade(student.grade)}, ${student.school} (${student.shift} смена)

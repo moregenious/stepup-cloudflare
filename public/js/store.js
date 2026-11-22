@@ -43,6 +43,16 @@ const SECRET_TITLE_RENAMES = {
   'легенда мини-игр': 'Легенда Step Up'
 };
 
+/**
+ * School year (set by the admin in «Учебный год», settings key schoolYear): a month of a group is 8 of its lessons
+ * in a row, counted from the start of the year; the winter break is skipped. 2026–2027 (table «Месяц 2026-2027»):
+ * for Mon/Thu groups November = 02.11–26.11 and 30.11 is the first lesson of December.
+ */
+const DEFAULT_SCHOOL_YEAR = { start: '2026-09-07', breakFrom: '2026-12-28', breakTo: '2027-01-10', end: '2027-06-30' };
+const LESSONS_PER_MONTH = 8;
+const MONTH_NAMES_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+const isIsoDay = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
 /** Icons of the secret titles (same as SECRET_TITLES in avatarCustomization.js) for the title shown on the avatar */
 const SECRET_TITLE_ICONS = {
   'Словарный ниндзя': '🥷', 'Укротитель глаголов': '🐉', 'Мастер «если бы»': '🔮', 'Архитектор миров': '🏛️',
@@ -638,6 +648,7 @@ class Store {
   }
 
   notify() {
+    this._lessonMonthsCache = null; // the schedule may have changed
     for (const listener of this.listeners) {
       try {
         listener(this.state);
@@ -1859,6 +1870,8 @@ class Store {
       shift: groupData.shift || 'Первая',
       classroom: groupData.classroom?.trim() || 'Кабинет 1',
       description: groupData.description?.trim() || '',
+      // First lesson of a group that starts during the year (its months of 8 lessons count from it)
+      startDate: isIsoDay(groupData.startDate) ? groupData.startDate : '',
       status: 'active',
       createdAt: new Date().toISOString()
     };
@@ -2312,7 +2325,7 @@ class Store {
     if (!this._serverSynced) return 0;
     // Generated lessons must go before they could be auto-completed (each one moves the textbook on)
     if (this.isStaffSession()) this.removeGeneratedYearlyLessons();
-    if (this.isVacation()) return 0;
+    if (this.isVacation() || this.isSchoolBreak(this.todayDateStr(now))) return 0;
     if (!this.state || !Array.isArray(this.state.schedule)) return 0;
     let updatedCount = 0;
 
@@ -2332,12 +2345,28 @@ class Store {
     for (let back = CATCH_UP_DAYS; back >= 1; back--) {
       const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
       if (day < CATCH_UP_FROM) continue;
+      if (this.isSchoolBreak(day.getFullYear() + '-' + String(day.getMonth() + 1).padStart(2, '0') + '-' + String(day.getDate()).padStart(2, '0'))) continue; // winter break: no lessons
       const dayIdx = day.getDay() === 0 ? 7 : day.getDay();
       const dStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
       const dShort = `${dStr.slice(8, 10)}.${dStr.slice(5, 7)}`;
       this.state.schedule.forEach(lesson => {
-        if (!lesson.isRecurring || lesson.dayIndex !== dayIdx) return;
+        if (!lesson.isRecurring) return;
         const exc = lesson.exceptions && (lesson.exceptions[dStr] || lesson.exceptions[dShort]);
+        // One lesson moved to this day ("Только этот"): held here, completed like a regular one
+        const movedHere = exc && exc.movedFrom && !exc.deleted;
+        if (lesson.dayIndex !== dayIdx && !movedHere) return;
+        if (movedHere) {
+          if (exc.status === 'completed' || exc.status === 'cancelled' || exc.manualPlanned) return;
+          [dStr, dShort].forEach(k => { lesson.exceptions[k] = { ...lesson.exceptions[k], status: 'completed', completedAt: now.toISOString(), autoCaughtUp: true }; });
+          updatedCount++;
+          if (lesson.groupId) {
+            try { this._handleLessonCompletion(lesson, dStr); } catch (err) { console.warn('⚠️ catch-up completion:', err); }
+          }
+          return;
+        }
+        // Moved to this weekday later: an earlier day of the new weekday was no lesson (no textbook step for it)
+        const activeFrom = this.recurringActiveFrom(lesson);
+        if (activeFrom && dStr < activeFrom) return;
         if (exc) return;
         const createdMs = Number((String(lesson.id).match(/^rec-(\d{13})/) || [])[1]) || Date.parse(lesson.createdAt || '') || 0;
         if (createdMs && createdMs > day.getTime() + 86400000) return; // the lesson did not exist yet
@@ -2640,6 +2669,156 @@ class Store {
     return (this.state.schedule || []).find(s => s.id === id || s.baseId === id || String(s.id) === String(id) || String(s.baseId) === String(id)) || null;
   }
 
+  /**
+   * Earlier weekdays of a recurring lesson: [{ dayIndex, from, until, time }], oldest first.
+   * Written when the lesson is moved to another day for all weeks (lesson.dayHistory); for lessons moved before that
+   * it is read from the dated marks left on another weekday (a Thursday lesson moved to Saturday keeps its
+   * "2026-11-05 completed" marks). Without it the past weeks would show the lesson on the new day.
+   */
+  recurringDayHistory(lesson) {
+    if (!lesson || !lesson.isRecurring) return [];
+    if (Array.isArray(lesson.dayHistory) && lesson.dayHistory.length) return lesson.dayHistory;
+    const weekday = (d) => { const n = new Date(d + 'T12:00:00').getDay(); return n === 0 ? 7 : n; };
+    // Marks on another weekday; one lesson moved there on purpose ("Только этот", movedFrom) is not a change of the day
+    const other = Object.keys(lesson.exceptions || {})
+      .filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k) && lesson.exceptions[k] && !lesson.exceptions[k].deleted && !lesson.exceptions[k].movedFrom && weekday(k) !== Number(lesson.dayIndex))
+      .sort();
+    if (!other.length) return [];
+    const counts = {};
+    other.forEach(k => { counts[weekday(k)] = (counts[weekday(k)] || 0) + 1; });
+    const dayIndex = Number(Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]);
+    // The move is taken from the next week on (like a move made in the schedule): no extra new-day lesson
+    // in the week of the last old-day lesson
+    const end = new Date(other[other.length - 1] + 'T12:00:00');
+    end.setDate(end.getDate() + (7 - (end.getDay() || 7)));
+    const until = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+    return [{ dayIndex, from: other[0], until, inferred: true }];
+  }
+
+  /** First date the recurring lesson runs on its current weekday (null = always did) */
+  recurringActiveFrom(lesson) {
+    const hist = this.recurringDayHistory(lesson);
+    if (!hist.length) return null;
+    const last = hist.reduce((a, h) => (h.until > a ? h.until : a), '');
+    const d = new Date(last + 'T12:00:00');
+    d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  /** Days of one week on which a recurring lesson takes place: its weekday from the move on, the old one before */
+  recurringDaysInWeek(lesson, weekDays) {
+    const out = [];
+    const from = this.recurringActiveFrom(lesson);
+    const cur = weekDays.find(w => w.dayIndex === lesson.dayIndex || (lesson.dayOfWeek && w.dayName.toLowerCase() === lesson.dayOfWeek.toLowerCase()));
+    // Before the move a day of the new weekday counts only when it was marked (a lesson really held that day)
+    const markedCur = cur && lesson.exceptions && lesson.exceptions[cur.dateStr] && !lesson.exceptions[cur.dateStr].deleted;
+    if (cur && (!from || cur.dateStr >= from || markedCur)) out.push({ targetDay: cur, old: null });
+    if (from) {
+      const hist = this.recurringDayHistory(lesson);
+      weekDays.forEach(w => {
+        if (w === cur || w.dateStr >= from) return;
+        const old = hist.find(h => Number(h.dayIndex) === w.dayIndex && w.dateStr <= h.until && (!h.from || w.dateStr >= h.from));
+        if (old) out.push({ targetDay: w, old });
+      });
+    }
+    // Single lessons moved to another day of this week
+    weekDays.forEach(w => {
+      const e = lesson.exceptions && lesson.exceptions[w.dateStr];
+      if (e && e.movedFrom && !e.deleted && !out.some(o => o.targetDay === w)) out.push({ targetDay: w, old: null });
+    });
+    return out;
+  }
+
+  /**
+   * The group's "months" of the school year: blocks of 8 lessons in a row from the start of September, the winter
+   * break skipped (getSchoolYear). Moved and cancelled lessons are taken into account.
+   * [{ num, key, name, shortName, dates, lessonIds, rangeFrom, until }] — rangeFrom..until is the stretch of days
+   * that belongs to the month (marks made on a day off between two months go to the earlier one).
+   */
+  getGroupLessonMonths(groupId) {
+    if (!groupId) return [];
+    if (!this._lessonMonthsCache) this._lessonMonthsCache = new Map();
+    if (this._lessonMonthsCache.has(groupId)) return this._lessonMonthsCache.get(groupId);
+    const year = this.getSchoolYear();
+    const group = this.getGroupById(groupId);
+    // A group that started later in the year counts its months from its own first lesson
+    const start = isIsoDay(group?.startDate) && group.startDate > year.start ? group.startDate : year.start;
+    const inBreak = (d) => this.isSchoolBreak(d);
+    const lessonOf = new Map();
+    const end = new Date(year.end + 'T00:00:00');
+    const firstMonday = new Date(start + 'T00:00:00');
+    firstMonday.setDate(firstMonday.getDate() - ((firstMonday.getDay() + 6) % 7));
+    for (const monday = firstMonday; monday <= end; monday.setDate(monday.getDate() + 7)) {
+      (this.getWeekSchedule(new Date(monday), { groupId, allTeachers: true }).lessons || []).forEach(l => {
+        if (!l.date || l.date < start || l.date > year.end || inBreak(l.date)) return;
+        if (l.actualStatus === 'cancelled') return;
+        if (l.groupId !== groupId && !(l.linkedGroupIds || []).includes(groupId)) return;
+        if (!lessonOf.has(l.date)) lessonOf.set(l.date, l.baseId || l.id);
+      });
+    }
+    const dates = [...lessonOf.keys()].sort();
+    const academic = this.getAcademicMonthsList();
+    const out = [];
+    for (let i = 0; i * LESSONS_PER_MONTH < dates.length && i < academic.length; i++) {
+      const chunk = dates.slice(i * LESSONS_PER_MONTH, (i + 1) * LESSONS_PER_MONTH);
+      out.push({ ...academic[i], dates: chunk, lessonIds: chunk.map(d => lessonOf.get(d)) });
+    }
+    const dayBefore = (d) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() - 1); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    // A month runs from its first lesson until the day before the next month starts (the first from 1 September)
+    out.forEach((m, i) => {
+      m.rangeFrom = i === 0 ? (start === year.start ? start.slice(0, 8) + '01' : start) : m.dates[0];
+      m.until = out[i + 1] ? dayBefore(out[i + 1].dates[0]) : year.end;
+      // A group that started later: its months are the months of its textbook, not calendar months
+      if (start !== year.start) { m.name = `${i + 1}-й месяц учебника`; m.shortName = `${i + 1}-й месяц`; }
+    });
+    this._lessonMonthsCache.set(groupId, out);
+    return out;
+  }
+
+  /** One month of a group (monthKey 'YYYY-MM' of the academic month list) or null */
+  getGroupLessonMonth(groupId, monthKey) {
+    return this.getGroupLessonMonths(groupId).find(m => m.key === monthKey) || null;
+  }
+
+  /** The group's month that is going on now (or the next one, between months) */
+  getGroupCurrentLessonMonth(groupId, today = this.todayDateStr()) {
+    const months = this.getGroupLessonMonths(groupId);
+    return months.find(m => today <= m.until) || months[months.length - 1] || null;
+  }
+
+  /** The month to show a student's attendance for: their group's current month, otherwise the calendar month */
+  getStudentAttendanceMonth(studentId) {
+    const student = this.getStudentById(studentId);
+    return (student?.groupId && this.getGroupCurrentLessonMonth(student.groupId)) || this.getCurrentAcademicMonth();
+  }
+
+  /**
+   * Move one lesson of a recurring schedule to another date ("Только этот" with another day): the old date is
+   * taken out, the new one appears in the schedule, the attendance journal and the teacher's cabinet.
+   * A lesson already marked as held keeps that mark on its new date (the textbook does not move twice).
+   */
+  moveLessonOccurrence(lessonId, fromDate, toDate, data = {}) {
+    const lesson = this.getLessonById(lessonId);
+    if (!lesson || !lesson.isRecurring || !fromDate || !toDate || fromDate === toDate) return null;
+    if (!lesson.exceptions) lesson.exceptions = {};
+    const short = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+    const prev = lesson.exceptions[fromDate] || lesson.exceptions[short(fromDate)] || {};
+    const moved = { ...data, date: toDate, movedFrom: fromDate };
+    delete moved.isRecurring; delete moved.exceptions; delete moved.dayHistory;
+    if (prev.status === 'completed') { moved.status = 'completed'; moved.completedAt = prev.completedAt || new Date().toISOString(); }
+    if (prev.linkedGroupIds && !moved.linkedGroupIds) moved.linkedGroupIds = prev.linkedGroupIds;
+    [fromDate, short(fromDate)].forEach(k => { lesson.exceptions[k] = { deleted: true, movedTo: toDate }; });
+    [toDate, short(toDate)].forEach(k => { lesson.exceptions[k] = { ...moved }; });
+    const group = lesson.groupId ? this.getGroupById(lesson.groupId) : null;
+    this.logActivity({
+      type: 'lesson',
+      title: 'Урок перенесён',
+      details: `Урок группы «${group?.name || lesson.topic || 'Урок'}» перенесён с ${short(fromDate)} на ${short(toDate)}`
+    });
+    this.saveState(true);
+    return { ...lesson, ...moved };
+  }
+
   getWeekSchedule(mondayDate, filter = {}) {
     const monday = new Date(mondayDate);
     monday.setHours(0, 0, 0, 0);
@@ -2673,16 +2852,15 @@ class Store {
 
     allLessons.forEach(l => {
       if (l.isRecurring) {
-        const targetDay = weekDays.find(w => w.dayIndex === l.dayIndex || (l.dayOfWeek && w.dayName.toLowerCase() === l.dayOfWeek.toLowerCase()));
-        if (!targetDay) return;
-
+        // Usually one day a week; a lesson moved to another weekday keeps its old day in the weeks before the move
+        this.recurringDaysInWeek(l, weekDays).forEach(({ targetDay, old }) => {
         const exc = l.exceptions && (l.exceptions[targetDay.dateStr] || l.exceptions[targetDay.shortStr]);
         if (exc && exc.deleted) return;
 
         const status = exc?.status || 'planned';
-        const time = exc?.time || l.time || '10:00 - 11:00';
-        const startTime = exc?.startTime || l.startTime || time.split('-')[0].trim();
-        const duration = Number(exc?.duration || l.duration || 60);
+        const time = exc?.time || old?.time || l.time || '10:00 - 11:00';
+        const startTime = exc?.startTime || old?.startTime || l.startTime || time.split('-')[0].trim();
+        const duration = Number(exc?.duration || old?.duration || l.duration || 60);
         const group = l.groupId ? this.getGroupById(l.groupId) : null;
         const teacher = l.teacherId ? this.getTeacherById(l.teacherId) : null;
         const lessonGroupIds = this.getLessonGroupIds(l, exc);
@@ -2706,15 +2884,16 @@ class Store {
           time,
           startTime,
           duration,
-          status: isVacation ? 'vacation' : status,
+          status: (isVacation || this.isSchoolBreak(targetDay.dateStr)) ? 'vacation' : status,
           actualStatus: status,
-          isVacationPaused: isVacation,
+          isVacationPaused: isVacation || this.isSchoolBreak(targetDay.dateStr),
           group,
           teacher,
           groupName: joinedName || (group ? group.name : (l.topic || 'Группа')),
           isJoined: !!joinedName,
           color: l.color || this.pickColorForGroup(l.groupId),
           isRecurringInstance: true
+        });
         });
       } else {
         const targetDay = weekDays.find(w => w.dateStr === l.date || w.shortStr === l.date);
@@ -2739,9 +2918,9 @@ class Store {
           dayOfWeek: targetDay.dayName,
           dayShort: targetDay.dayShort,
           dayNumber: targetDay.dayNumber,
-          status: isVacation ? 'vacation' : status,
+          status: (isVacation || this.isSchoolBreak(targetDay.dateStr)) ? 'vacation' : status,
           actualStatus: status,
-          isVacationPaused: isVacation,
+          isVacationPaused: isVacation || this.isSchoolBreak(targetDay.dateStr),
           group,
           teacher,
           groupName: joinedName || (group ? group.name : (l.topic || 'Урок')),
@@ -2908,6 +3087,20 @@ class Store {
       if (idx !== -1) lessonData.dayIndex = idx + 1;
     }
 
+    // Moved to another weekday for all weeks: the weeks before the move keep the old day
+    // (schedule, attendance journal, lesson counts). The move starts with the week of the chosen date.
+    if (lesson.isRecurring && updateScope !== 'single' && lessonData.dayIndex && Number(lessonData.dayIndex) !== Number(lesson.dayIndex)) {
+      const base = new Date(String(targetDate || lessonData.date || this.todayDateStr()).slice(0, 10) + 'T12:00:00');
+      if (!isNaN(base)) {
+        base.setDate(base.getDate() - ((base.getDay() + 6) % 7) - 1); // the Sunday before that week
+        const until = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
+        const prev = this.recurringDayHistory(lesson);
+        const from = this.recurringActiveFrom(lesson) || undefined;
+        lesson.dayHistory = [...prev.map(h => ({ ...h })), { dayIndex: Number(lesson.dayIndex), dayOfWeek: lesson.dayOfWeek, time: lesson.time, startTime: lesson.startTime, duration: lesson.duration, ...(from ? { from } : {}), until }]
+          .filter(h => !h.until || !h.from || h.from <= h.until);
+      }
+    }
+
     if (lessonData.duration) {
       lessonData.duration = Number(lessonData.duration);
     }
@@ -3049,6 +3242,8 @@ class Store {
     const student = lesson.studentId ? this.getStudentById(lesson.studentId) : null;
     const tbName = group?.textbook || student?.textbook;
     if (!tbName) return;
+    // Two lessons of the group on the same day (a duplicate in the schedule) move the textbook once
+    if (group && this._groupHeldByOtherLesson(group.id, dateStr, lesson.id)) return;
 
     try {
       if (group) {
@@ -3085,6 +3280,21 @@ class Store {
     }
   }
 
+  /** Another lesson of the schedule (not lessonId) is marked held for this group on that day */
+  _groupHeldByOtherLesson(groupId, dateStr, lessonId) {
+    if (!groupId || !dateStr) return false;
+    const day = String(dateStr).slice(0, 10);
+    return (this.state.schedule || []).some(l => {
+      if (!l || String(l.id) === String(lessonId)) return false;
+      if (l.groupId !== groupId && !(l.linkedGroupIds || []).includes(groupId)) return false;
+      if (l.isRecurring) {
+        const e = l.exceptions && l.exceptions[day];
+        return Boolean(e && !e.deleted && e.status === 'completed');
+      }
+      return l.date === day && l.status === 'completed';
+    });
+  }
+
   _exceptionFor(lesson, dateStr) {
     if (!lesson || !lesson.isRecurring || !lesson.exceptions || !dateStr) return null;
     return lesson.exceptions[dateStr] || null;
@@ -3098,6 +3308,8 @@ class Store {
     }
     const group = lesson.groupId ? this.getGroupById(lesson.groupId) : null;
     if (!group || !Array.isArray(group.conductedLessons) || group.conductedLessons.length === 0) return;
+    // Another lesson of the group that day is still held: the textbook step stays
+    if (this._groupHeldByOtherLesson(group.id, dateStr, lesson.id)) return;
     try {
       // Find and remove the latest conducted lesson key for this group
       for (let m = 10; m >= 1; m--) {
@@ -3671,19 +3883,56 @@ class Store {
   }
 
   // --- Monthly Group Competition & Leaderboard System ---
+  /** Months of the school year, from the month of its start to the month of its end (keys 'YYYY-MM', num 1…) */
   getAcademicMonthsList() {
-    return [
-      { key: '2026-09', name: 'Сентябрь 2026', shortName: 'Сентябрь', year: 2026, monthIndex: 8, num: 1 },
-      { key: '2026-10', name: 'Октябрь 2026', shortName: 'Октябрь', year: 2026, monthIndex: 9, num: 2 },
-      { key: '2026-11', name: 'Ноябрь 2026', shortName: 'Ноябрь', year: 2026, monthIndex: 10, num: 3 },
-      { key: '2026-12', name: 'Декабрь 2026', shortName: 'Декабрь', year: 2026, monthIndex: 11, num: 4 },
-      { key: '2027-01', name: 'Январь 2027', shortName: 'Январь', year: 2027, monthIndex: 0, num: 5 },
-      { key: '2027-02', name: 'Февраль 2027', shortName: 'Февраль', year: 2027, monthIndex: 1, num: 6 },
-      { key: '2027-03', name: 'Март 2027', shortName: 'Март', year: 2027, monthIndex: 2, num: 7 },
-      { key: '2027-04', name: 'Апрель 2027', shortName: 'Апрель', year: 2027, monthIndex: 3, num: 8 },
-      { key: '2027-05', name: 'Май 2027', shortName: 'Май', year: 2027, monthIndex: 4, num: 9 },
-      { key: '2027-06', name: 'Июнь 2027', shortName: 'Июнь', year: 2027, monthIndex: 5, num: 10 }
-    ];
+    const year = this.getSchoolYear();
+    if (this._academicMonths && this._academicMonths.stamp === year.start + year.end) return this._academicMonths.list;
+    const list = [];
+    let y = Number(year.start.slice(0, 4));
+    let m = Number(year.start.slice(5, 7)) - 1;
+    const endKey = year.end.slice(0, 7);
+    for (let num = 1; num <= 14; num++) {
+      const key = `${y}-${String(m + 1).padStart(2, '0')}`;
+      list.push({ key, name: `${MONTH_NAMES_RU[m]} ${y}`, shortName: MONTH_NAMES_RU[m], year: y, monthIndex: m, num });
+      if (key >= endKey) break;
+      m++; if (m > 11) { m = 0; y++; }
+    }
+    this._academicMonths = { stamp: year.start + year.end, list };
+    return list;
+  }
+
+  /** The school year: { start, breakFrom, breakTo, end } (YYYY-MM-DD), set by the admin in «Учебный год» */
+  getSchoolYear() {
+    const s = this.state.schoolYear || {};
+    const ok = isIsoDay(s.start) && isIsoDay(s.end) && s.start < s.end;
+    const y = ok ? s : DEFAULT_SCHOOL_YEAR;
+    const hasBreak = ok ? isIsoDay(s.breakFrom) && isIsoDay(s.breakTo) && s.breakFrom <= s.breakTo : true;
+    return { start: y.start, end: y.end, breakFrom: hasBreak ? y.breakFrom : null, breakTo: hasBreak ? y.breakTo : null };
+  }
+
+  /** Save the school year (admin). Returns { success, message } */
+  setSchoolYear({ start, breakFrom, breakTo, end }) {
+    if (!isIsoDay(start) || !isIsoDay(end)) return { success: false, message: 'Укажите начало и конец учебного года' };
+    if (start >= end) return { success: false, message: 'Конец учебного года должен быть позже начала' };
+    const hasBreak = isIsoDay(breakFrom) || isIsoDay(breakTo);
+    if (hasBreak) {
+      if (!isIsoDay(breakFrom) || !isIsoDay(breakTo)) return { success: false, message: 'Укажите обе даты каникул' };
+      if (breakFrom > breakTo) return { success: false, message: 'Каникулы: дата «по» раньше даты «с»' };
+      if (breakFrom <= start || breakTo >= end) return { success: false, message: 'Каникулы должны быть внутри учебного года' };
+    }
+    this.state.schoolYear = { start, end, breakFrom: hasBreak ? breakFrom : '', breakTo: hasBreak ? breakTo : '' };
+    this._lessonMonthsCache = null;
+    this._academicMonths = null;
+    this.logActivity({ type: 'system', title: 'Учебный год изменён', details: `Начало ${start}, каникулы ${hasBreak ? breakFrom + ' – ' + breakTo : 'нет'}, конец ${end}` });
+    this.saveState(true);
+    this.notify();
+    return { success: true, message: 'Учебный год сохранён' };
+  }
+
+  /** A day of the winter break of the school year */
+  isSchoolBreak(dateStr) {
+    const y = this.getSchoolYear();
+    return Boolean(y.breakFrom && dateStr && dateStr >= y.breakFrom && dateStr <= y.breakTo);
   }
 
   /**
@@ -4160,7 +4409,10 @@ class Store {
       history.push({ lessonId: l.id, date: l.date, time: l.time, topic: l.topic, status: l.attendance[studentId] === 'absent' ? 'absent' : 'present' });
     });
     if (monthKey) {
-      for (let i = history.length - 1; i >= 0; i--) if (!String(history[i].date || '').startsWith(monthKey)) history.splice(i, 1);
+      // The group's month of 8 lessons (as in the attendance journal); without a group — the calendar month
+      const m = student.groupId ? this.getGroupLessonMonth(student.groupId, monthKey) : null;
+      const inMonth = (d) => (m ? d >= m.rangeFrom && d <= m.until : String(d || '').startsWith(monthKey));
+      for (let i = history.length - 1; i >= 0; i--) if (!inMonth(String(history[i].date || ''))) history.splice(i, 1);
     }
     history.sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const attended = history.filter(h => h.status === 'present').length;

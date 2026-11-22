@@ -31,6 +31,7 @@ import { ShopView } from './views/shopView.js';
 import { HomeworkView } from './views/homeworkView.js';
 import { IrregularVerbsView } from './views/irregularVerbsView.js';
 import { SurveyView } from './views/surveyView.js';
+import { SchoolYearView } from './views/schoolYearView.js';
 import { initTheme } from './theme.js';
 import { mountPaymentReminder, paymentDotHtml } from './components/paymentReminder.js';
 
@@ -86,6 +87,7 @@ export class App {
     initTheme();
 
     const NO_BACKGROUND_RELOAD_ROUTES = new Set([
+      '#school-year',
       '#games',
       '#vocabulary',
       '#irregular-verbs',
@@ -353,6 +355,10 @@ export class App {
           <span class="nav-item-icon">📅</span>
           <span>Посещаемость</span>
         </a>
+        <a href="#school-year" class="nav-item ${this.currentHash === '#school-year' ? 'active' : ''}">
+          <span class="nav-item-icon">📆</span>
+          <span>Учебный год</span>
+        </a>
         <a href="#games" class="nav-item ${this.currentHash === '#games' ? 'active' : ''}">
           <span class="nav-item-icon">🎮</span>
           <span>Мини-игры</span>
@@ -411,6 +417,10 @@ export class App {
         <a href="#attendance" class="nav-item ${this.currentHash === '#attendance' ? 'active' : ''}">
           <span class="nav-item-icon">📅</span>
           <span>Посещаемость</span>
+        </a>
+        <a href="#school-year" class="nav-item ${this.currentHash === '#school-year' ? 'active' : ''}">
+          <span class="nav-item-icon">📆</span>
+          <span>Учебный год</span>
         </a>
         <a href="#scoring" class="nav-item ${this.currentHash === '#scoring' ? 'active' : ''}">
           <span class="nav-item-icon">⭐</span>
@@ -860,6 +870,9 @@ export class App {
           break;
         case '#attendance':
           AttendanceView.render(container);
+          break;
+        case '#school-year':
+          SchoolYearView.render(container);
           break;
         default:
           AdminDashboard.render(container);
