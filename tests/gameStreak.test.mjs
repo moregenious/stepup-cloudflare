@@ -175,3 +175,35 @@ test('easy games: English World 1 and Project 1 play freely, numbers are limited
   assert.equal(easyGameCheck(played, 'numbers', 'Project 4', at('2026-11-12')).allowed, false, 'numbers once a week for Project 4');
   assert.equal(easyGameCheck(played, 'numbers', 'Project 10', at('2026-11-12')).allowed, false, 'Project 10 is not Project 1');
 });
+
+test('word game: a written word is checked kindly, wrong letters are counted', async () => {
+  const { checkTypedWord } = await import('../public/js/utils/wordCheck.js');
+  assert.equal(checkTypedWord('Swim', 'swim').ok, true, 'capital letters do not matter');
+  assert.equal(checkTypedWord('  to swim ', 'swim').ok, true, '"to" before a verb');
+  assert.equal(checkTypedWord('swim', 'to swim').ok, true);
+  assert.equal(checkTypedWord('apple', 'an apple').ok, true, 'articles');
+  assert.equal(checkTypedWord('color', 'colour/color').ok, true, 'either spelling');
+  assert.equal(checkTypedWord('wake up', 'get up, wake up').ok, true);
+  assert.equal(checkTypedWord('look', 'look (at)').ok, true, 'the part in brackets may be left out');
+  assert.equal(checkTypedWord('look at', 'look (at)').ok, true);
+  assert.deepEqual(checkTypedWord('elefant', 'elephant'), { ok: false, errors: 2 });
+  assert.deepEqual(checkTypedWord('beutiful', 'beautiful'), { ok: false, errors: 1 });
+  assert.equal(checkTypedWord('', 'cat').ok, false);
+  assert.equal(checkTypedWord("Sorry, I'm busy then", 'sorry, I’m busy then').ok, true, 'a phrase with a comma is one answer');
+  assert.equal(checkTypedWord("sorry I'm busy then.", 'sorry, I’m busy then').ok, true, 'commas and dots inside do not matter');
+});
+
+test('word game: hints in brackets are hidden, they give the answer away', async () => {
+  const { cleanTranslation, cleanEnglishWord } = await import('../public/js/utils/wordCheck.js');
+  assert.equal(cleanTranslation('нос (ноуз)'), 'нос');
+  assert.equal(cleanTranslation('лётчик (пАйлэт)'), 'лётчик');
+  assert.equal(cleanTranslation('2 (ту),'), '2');
+  assert.equal(cleanTranslation('автомобиль   (кАа)'), 'автомобиль');
+  assert.equal(cleanTranslation('садиться (в самолёт)'), 'садиться');
+  assert.equal(cleanTranslation('вызов, испытание'), 'вызов, испытание');
+  assert.equal(cleanTranslation('насекомое (инсект),'), 'насекомое');
+  assert.equal(cleanTranslation('(кот)'), 'кот', 'a translation all in brackets is kept');
+  assert.equal(cleanTranslation('Луэлин)'), 'Луэлин', 'a stray bracket');
+  assert.equal(cleanEnglishWord('carry (кАри)'), 'carry');
+  assert.equal(cleanEnglishWord('look (at)'), 'look (at)');
+});

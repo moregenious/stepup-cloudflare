@@ -31,6 +31,7 @@ import { COLORS_DATA, ANIMALS_DATA } from '../data/pictureGamesData.js';
 import { NUMBER_LEVELS, buildNumbersRound } from '../data/numbersData.js';
 import { SECRET_TITLE_NAMES } from '../store.js';
 import { mountPaymentReminder, paymentReminderLine } from '../components/paymentReminder.js';
+import { checkTypedWord, cleanTranslation, cleanEnglishWord } from '../utils/wordCheck.js';
 
 /** Games on the choice page (key = GamesView.activeTab, streakKey = field of the game progress) */
 // Easy games first (the youngest find them at once), sentence building and conditionals last
@@ -316,7 +317,7 @@ export const GamesView = {
     const translationPool = new Set();
     (poolData.allWords || []).forEach(w => {
       if (w && w.translation && w.translation.trim()) {
-        translationPool.add(w.translation.trim());
+        translationPool.add(cleanTranslation(w.translation));
       }
     });
 
@@ -325,7 +326,7 @@ export const GamesView = {
         if (Array.isArray(list)) {
           list.forEach(w => {
             if (w && w.translation && w.translation.trim()) {
-              translationPool.add(w.translation.trim());
+              translationPool.add(cleanTranslation(w.translation));
             }
           });
         }
@@ -346,9 +347,30 @@ export const GamesView = {
     const candidateTranslationsList = Array.from(translationPool);
     const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
 
+    // English words for "Russian → English" choices (the student's own words first, then the textbooks')
+    const englishPool = new Set();
+    (poolData.allWords || []).forEach(w => { if (w && w.word && w.word.trim()) englishPool.add(cleanEnglishWord(w.word)); });
+    Object.values(store.state.textbookVocabularyPool || {}).forEach(list => {
+      if (Array.isArray(list)) list.forEach(w => { if (w && w.word && w.word.trim()) englishPool.add(cleanEnglishWord(w.word)); });
+    });
+    ['adventure', 'challenge', 'knowledge', 'celebrate', 'imagine', 'discover', 'protect', 'improve', 'journey', 'victory', 'success', 'patience', 'memory', 'dream', 'freedom', 'future', 'decision', 'present', 'treasure', 'friendship']
+      .forEach(w => englishPool.add(w));
+    const englishList = Array.from(englishPool);
+
+    // Kinds of questions by step of the word cycle (store.getWordGameRound):
+    //   'en-ru' — English word, pick the translation;  'ru-en' — translation, pick the English word;
+    //   'type'  — translation, write the English word (3 tries).
+    const phase = round.phase;
+    const kinds = phase === 'mistakes' ? Array(rawWords.length).fill('ru-en')
+      : phase === 'check' ? Array(rawWords.length).fill('type')
+      : phase === 'new' ? rawWords.map((_, i) => (i % 2 === 0 ? 'en-ru' : 'ru-en'))
+      : shuffle(rawWords.map((_, i) => (i < 4 ? 'en-ru' : i < 7 ? 'ru-en' : 'type')));
+
     const questions = rawWords.map((w, idx) => {
-      const correctTr = w.translation ? w.translation.trim() : 'перевод';
+      const correctTr = w.translation ? cleanTranslation(w.translation) : 'перевод';
       const trDisplay = w.transcription ? (w.transcription.startsWith('[') ? w.transcription : `[${w.transcription}]`) : '';
+      const word = w.word ? cleanEnglishWord(w.word) : 'Word';
+      const type = kinds[idx] || 'en-ru';
 
       // Pick 3 unique distractors that differ from correct translation
       const availableDistractors = candidateTranslationsList.filter(
@@ -356,12 +378,18 @@ export const GamesView = {
       );
       const chosenDistractors = shuffle(availableDistractors).slice(0, 3);
 
-      // Combine 1 correct and 3 distractors, then shuffle
-      const options = shuffle([correctTr, ...chosenDistractors]);
+      // Combine 1 correct and 3 distractors, then shuffle. All options start with a capital letter,
+      // so that "Adventure" among "just / seven" doesn't give the answer away (answers are compared ignoring case).
+      const upperFirst = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+      const options = (type === 'ru-en'
+        ? shuffle([word, ...shuffle(englishList.filter(e => e.toLowerCase() !== word.toLowerCase())).slice(0, 3)])
+        : shuffle([correctTr, ...chosenDistractors])).map(upperFirst);
 
       return {
         id: idx + 1,
-        word: w.word ? w.word.trim() : 'Word',
+        type,
+        word,
+        wordKey: w.word ? w.word.trim() : word, // the word as in the lesson plan: the key of the mistakes list
         transcription: trDisplay,
         translation: correctTr,
         example: w.example ? w.example.trim() : '',
@@ -369,8 +397,10 @@ export const GamesView = {
         monthNumber: w.monthNumber || null,
         lessonNumber: w.lessonNumber || null,
         options,
+        tries: 0,
         userAnswer: null,
-        isCorrect: null
+        isCorrect: null,
+        hadMistakes: false
       };
     });
 
@@ -402,7 +432,7 @@ export const GamesView = {
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); flex-wrap: wrap; gap: 8px;">
           <div>
             <h3 style="margin: 0; font-size: 1.2rem; color: var(--color-primary); display: flex; align-items: center; gap: 6px;">
-              <span>🔤</span> <span>Тест по словам: выберите правильный перевод</span>
+              <span>🔤</span> <span>Тест по словам</span>
             </h3>
             <p style="margin: 2px 0 0 0; font-size: var(--font-size-xs); color: var(--color-text-muted);">
               ${state.round ? `<strong style="color: var(--color-primary);">${state.round.title}${state.round.lessonLabel && state.round.phase !== 'mix' ? ` (урок ${state.round.lessonLabel})` : ''}</strong> · ` : ''}3 победы 10/10 подряд открывают секретный титул!
@@ -431,6 +461,7 @@ export const GamesView = {
             </div>
           ` : ''}
 
+          ${q.type === 'en-ru' ? `
           <div style="font-size: 0.8rem; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.5px;">
             🇬🇧 Английское слово:
           </div>
@@ -448,8 +479,29 @@ export const GamesView = {
           <div style="margin-top: 8px; font-size: var(--font-size-xs); color: #075985;">
             Выберите верный русский перевод из 4 вариантов:
           </div>
+          ` : `
+          <div style="font-size: 0.8rem; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.5px;">
+            🇷🇺 Перевод:
+          </div>
+
+          <div style="font-size: 2rem; font-weight: 800; color: #0c4a6e; margin: 4px 0;">
+            ${q.translation}
+          </div>
+
+          <div style="margin-top: 8px; font-size: var(--font-size-xs); color: #075985;">
+            ${q.type === 'type' ? 'Напишите это слово по-английски. 3 попытки:' : 'Выберите английское слово из 4 вариантов:'}
+          </div>
+          `}
         </div>
 
+        ${q.type === 'type' ? `
+        <!-- Writing the word: 3 tries -->
+        <form class="word-type-form" id="word-type-form" autocomplete="off">
+          <input type="text" id="word-type-input" class="word-type-input" placeholder="Напишите слово…" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-label="Слово по-английски">
+          <button type="submit" class="btn btn-primary" id="btn-word-type-check">Проверить</button>
+        </form>
+        <div class="word-type-tries" id="word-type-tries">${[0, 1, 2].map(i => `<span class="word-try ${i < q.tries ? 'is-used' : ''}"></span>`).join('')}<span>Попыток: ${3 - q.tries} из 3</span></div>
+        ` : `
         <!-- Options Grid: 2x2 on desktop, 1-column on mobile -->
         <div class="words-options-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-bottom: var(--space-4);">
           ${q.options.map((opt, idx) => `
@@ -459,6 +511,7 @@ export const GamesView = {
             </button>
           `).join('')}
         </div>
+        `}
 
         <!-- Feedback & Next / Finish Button -->
         <div id="words-feedback-box" style="min-height: 52px; display: flex; flex-direction: column; justify-content: center; gap: 6px;">
@@ -495,7 +548,9 @@ export const GamesView = {
 
         const chosen = btn.dataset.opt;
         q.userAnswer = chosen;
-        q.isCorrect = (chosen.toLowerCase().trim() === q.translation.toLowerCase().trim());
+        // "Russian → English": the right answer is the English word
+        const rightAnswer = q.type === 'ru-en' ? q.word : q.translation;
+        q.isCorrect = (chosen.toLowerCase().trim() === rightAnswer.toLowerCase().trim());
 
         if (q.isCorrect) {
           state.score++;
@@ -508,7 +563,9 @@ export const GamesView = {
             badge.style.color = '#16a34a';
             badge.textContent = '✓';
           }
-          feedbackEl.innerHTML = `<span style="color: #16a34a;">✓ Великолепно! Правильный перевод: <strong>${q.translation}</strong></span>`;
+          feedbackEl.innerHTML = q.type === 'ru-en'
+            ? `<span style="color: #16a34a;">✓ Великолепно! <strong>${q.word}</strong> — ${q.translation}</span>`
+            : `<span style="color: #16a34a;">✓ Великолепно! Правильный перевод: <strong>${q.translation}</strong></span>`;
         } else {
           btn.style.background = '#ef4444';
           btn.style.color = '#ffffff';
@@ -522,7 +579,7 @@ export const GamesView = {
 
           // Highlight correct option
           mount.querySelectorAll('.btn-word-opt').forEach(b => {
-            if (b.dataset.opt.toLowerCase().trim() === q.translation.toLowerCase().trim()) {
+            if (b.dataset.opt.toLowerCase().trim() === rightAnswer.toLowerCase().trim()) {
               b.style.background = '#22c55e';
               b.style.color = '#ffffff';
               b.style.borderColor = '#16a34a';
@@ -535,7 +592,9 @@ export const GamesView = {
             }
           });
 
-          feedbackEl.innerHTML = `<span style="color: #dc2626;">✕ Ошибка! Правильный перевод: <strong>${q.translation}</strong></span>`;
+          feedbackEl.innerHTML = q.type === 'ru-en'
+            ? `<span style="color: #dc2626;">✕ Ошибка! Правильно: <strong>${q.word}</strong> — ${q.translation}</span>`
+            : `<span style="color: #dc2626;">✕ Ошибка! Правильный перевод: <strong>${q.translation}</strong></span>`;
         }
 
         // Show example sentence if present
@@ -558,6 +617,66 @@ export const GamesView = {
         }
       });
     });
+
+    // Writing the word: 3 tries, 1 point when it is right within them
+    const typeForm = mount.querySelector('#word-type-form');
+    if (typeForm) {
+      const input = mount.querySelector('#word-type-input');
+      const triesEl = mount.querySelector('#word-type-tries');
+      setTimeout(() => input?.focus(), 50);
+      const showExample = () => {
+        if (q.example && exampleEl) {
+          exampleEl.style.display = 'block';
+          exampleEl.innerHTML = `<div style="background: rgba(14, 165, 233, 0.08); border-left: 3px solid #0284c7; padding: 6px 12px; border-radius: 4px; font-size: 0.85rem; color: var(--color-text-main);">💡 Пример: <em>«${q.example}»</em></div>`;
+        }
+      };
+      const finishQuestion = () => {
+        input.disabled = true;
+        typeForm.querySelector('button').disabled = true;
+        showExample();
+        if (nextBtn) { nextBtn.style.display = 'inline-flex'; nextBtn.focus(); }
+      };
+      typeForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (q.userAnswer !== null || !input.value.trim()) return;
+        q.tries += 1;
+        const check = checkTypedWord(input.value, q.word);
+        if (check.ok) {
+          q.userAnswer = input.value.trim();
+          q.isCorrect = true;
+          q.hadMistakes = q.tries > 1;
+          state.score++;
+          input.classList.remove('is-wrong');
+          input.classList.add('is-right');
+          feedbackEl.innerHTML = `<span style="color: #16a34a;">✓ Верно${q.tries > 1 ? ` с ${q.tries}-й попытки` : ''}! <strong>${q.word}</strong> — ${q.translation}</span>`;
+          finishQuestion();
+        } else {
+          // The word shakes and turns red; the number of wrong letters is shown
+          input.classList.remove('is-wrong');
+          void input.offsetWidth; // restart the shake
+          input.classList.add('is-wrong');
+          const left = 3 - q.tries;
+          const n = check.errors, n10 = n % 10, n100 = n % 100;
+          const mistakes = `${n} ${n10 === 1 && n100 !== 11 ? 'ошибка' : n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14) ? 'ошибки' : 'ошибок'}`;
+          if (left > 0) {
+            feedbackEl.innerHTML = `<span style="color: #dc2626;">✕ В слове ${mistakes}. Попробуй ещё раз!</span>`;
+            // cursor at the end: usually one letter needs fixing, not the whole word retyping
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
+          } else {
+            q.userAnswer = input.value.trim();
+            q.isCorrect = false;
+            q.hadMistakes = true;
+            feedbackEl.innerHTML = `<span style="color: #dc2626;">✕ В слове ${mistakes}. Правильно: <strong class="word-type-answer">${q.word}</strong></span>`;
+            finishQuestion();
+          }
+        }
+        if (triesEl) {
+          triesEl.innerHTML = [0, 1, 2].map(i => `<span class="word-try ${i < q.tries ? (q.isCorrect && i === q.tries - 1 ? 'is-right' : 'is-used') : ''}"></span>`).join('')
+            + `<span>${q.userAnswer !== null ? (q.isCorrect ? 'Слово написано' : 'Попытки закончились') : `Попыток: ${3 - q.tries} из 3`}</span>`;
+        }
+      });
+    }
 
     nextBtn?.addEventListener('click', () => {
       if (state.currentIndex < totalQ - 1) {

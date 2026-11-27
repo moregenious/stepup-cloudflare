@@ -5045,9 +5045,12 @@ class Store {
     const st = this.wordGameState(student, round.lessonKey);
     const wrongNow = [];
     answers.forEach(a => {
-      const k = String(a.word || '').toLowerCase().trim();
+      const k = String(a.wordKey || a.word || '').toLowerCase().trim();
       if (!k) return;
-      if (a.isCorrect) {
+      if (a.isCorrect && a.hadMistakes) {
+        // Written right, but not on the first try: not learnt yet, keep it among the words to repeat
+        st.errs[k] = (st.errs[k] || 0) + 1;
+      } else if (a.isCorrect) {
         if (st.errs[k] > 1) st.errs[k] -= 1; else delete st.errs[k];
       } else {
         st.errs[k] = (st.errs[k] || 0) + 1;

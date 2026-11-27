@@ -5116,3 +5116,31 @@ img.picture-swatch { background: none; }
 @media (max-width: 420px) {
   .sy-dates-grid { grid-template-columns: 1fr; }
 }
+
+/* Word game: writing the word (3 tries) */
+.word-type-form { display: flex; gap: var(--space-2); margin-bottom: var(--space-2); }
+.word-type-input {
+  flex: 1; min-width: 0; padding: 12px 14px; font-size: 1.3rem; font-weight: 700; letter-spacing: 0.3px;
+  border: 2px solid var(--color-border-strong); border-radius: var(--radius-lg); background: var(--color-bg-card); color: var(--color-text-main);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.word-type-input:focus { outline: none; border-color: var(--color-primary); }
+.word-type-input.is-wrong { border-color: #ef4444; background: #fee2e2; color: #991b1b; animation: word-shake 0.42s ease; }
+.word-type-input.is-right { border-color: #16a34a; background: #dcfce7; color: #14532d; }
+.word-type-form .btn { flex-shrink: 0; padding: 0 18px; font-weight: 800; }
+.word-type-tries { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: var(--space-3); }
+.word-try { width: 12px; height: 12px; border-radius: 50%; background: var(--color-border); }
+.word-try.is-used { background: #ef4444; }
+.word-try.is-right { background: #16a34a; }
+.word-type-answer { font-size: 1.1rem; }
+@keyframes word-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+@media (max-width: 420px) {
+  .word-type-form { flex-direction: column; }
+  .word-type-form .btn { padding: 12px; }
+}

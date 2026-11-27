@@ -166,3 +166,8 @@
 /* School year table */
 :root[data-theme="dark"] .sy-table tr.sy-current td { background: #1e1b4b; }
 :root[data-theme="dark"] .sy-warning { background: #2b1606; color: #fdba74; }
+
+/* Word game: writing the word */
+:root[data-theme="dark"] .word-type-input:focus { border-color: var(--color-primary); }
+:root[data-theme="dark"] .word-type-input.is-wrong { background: #2b0d0d; color: #fecaca; border-color: #ef4444; }
+:root[data-theme="dark"] .word-type-input.is-right { background: #062a1c; color: #bbf7d0; border-color: #16a34a; }
